@@ -58,6 +58,8 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  getSubmissions: (questionId: string) =>
+    request<SubmissionResultDto[]>(`/api/submissions?questionId=${encodeURIComponent(questionId)}`),
   getHint: (questionId: string) =>
     request<{ hint: string; level: number }>(`/api/questions/${encodeURIComponent(questionId)}/hints`, {
       method: 'POST',

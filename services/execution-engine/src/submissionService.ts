@@ -11,7 +11,7 @@ export class SubmissionService {
     private readonly timeoutMs = 3000,
   ) {}
 
-  async evaluate(input: SubmissionRequest): Promise<SubmissionResultDto> {
+  async evaluate(input: SubmissionRequest, ownerId = 'anonymous'): Promise<SubmissionResultDto> {
     const question = await this.repository.findById(input.questionId)
     if (!question) {
       throw new HttpError(404, 'Question not found.', 'QUESTION_NOT_FOUND')
@@ -56,7 +56,7 @@ export class SubmissionService {
           runtimeMs: result.runtimeMs,
         }],
       }
-      await this.repository.saveSubmission(customResult)
+      await this.repository.saveSubmission(ownerId, customResult)
       return customResult
     }
 
@@ -101,7 +101,7 @@ export class SubmissionService {
             : 'One or more test cases failed.',
     }
 
-    await this.repository.saveSubmission(result)
+    await this.repository.saveSubmission(ownerId, result)
     return result
   }
 

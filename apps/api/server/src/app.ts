@@ -32,7 +32,7 @@ export function createApp() {
 
   app.use('/api/health', healthRouter)
   app.use('/api/questions', createQuestionRouter(questionService))
-  app.use('/api/submissions', createSubmissionRouter(submissionService))
+  app.use('/api/submissions', createSubmissionRouter(submissionService, repository))
   app.use('/api/attempts', createAttemptRouter(repository, questionService))
 
   app.use(notFoundHandler)

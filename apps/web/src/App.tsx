@@ -114,6 +114,13 @@ function App() {
         setLanguage(restoredLanguage)
         setCode(restoredCode || attempt.question.starterCode[restoredLanguage])
         setSelectedTest(0)
+        apiClient.getSubmissions(attempt.questionId)
+          .then((history) => {
+            if (!cancelled) setSubmissionHistory(history)
+          })
+          .catch(() => {
+            if (!cancelled) setSubmissionHistory([])
+          })
       })
       .catch((error) => {
         if (!cancelled) {
@@ -187,14 +194,15 @@ function App() {
     const startX = event.clientX
     const startWidth = problemWidth
     const move = (pointerEvent: PointerEvent) => {
-      setProblemWidth(Math.min(700, Math.max(320, startWidth + pointerEvent.clientX - startX)))
+      const maximumWidth = Math.min(700, Math.max(320, window.innerWidth - 520 - 6))
+      setProblemWidth(Math.min(maximumWidth, Math.max(320, startWidth + pointerEvent.clientX - startX)))
     }
     const stop = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', stop)
-      document.body.classList.remove('resizing')
+      document.body.classList.remove('resizing', 'resizing-row')
     }
-    document.body.classList.add('resizing')
+    document.body.classList.add('resizing', 'resizing-row')
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', stop)
   }
@@ -235,7 +243,6 @@ function App() {
       .then((result) => {
         setSubmitted(false)
         setSubmissionResult(result)
-        setSubmissionHistory((history) => [result, ...history].slice(0, 20))
         setActiveTab('result')
       })
       .catch((error) => {
@@ -303,7 +310,9 @@ function App() {
     setRunning(true)
     setHasSubmitted(true)
     setOutputCollapsed(false)
-    setActiveTab('result')
+    setCustomMode(true)
+    setActiveTab('custom')
+    setCustomOutput('Running...')
     apiClient.submit({
       questionId: question.id,
       language,
@@ -315,7 +324,6 @@ function App() {
         setSubmitted(false)
         setSubmissionResult(result)
         setCustomOutput(result.caseResults?.[0]?.actualOutput ?? '')
-        setSubmissionHistory((history) => [result, ...history].slice(0, 20))
       })
       .catch((error) => {
         const result: SubmissionResultDto = {
@@ -334,7 +342,7 @@ function App() {
           message: error instanceof Error ? error.message : 'Unable to run the custom test.',
         }
         setSubmissionResult(result)
-        setCustomOutput('')
+        setCustomOutput(result.message)
       })
       .finally(() => setRunning(false))
   }
@@ -528,7 +536,7 @@ function App() {
           {editorTab === 'submissions' ? (
             <div className="submission-history">
               <div className="history-heading">
-                <span>Status</span><span>Language</span><span>Cases</span><span>Runtime</span>
+                <span>Status</span><span>Language</span><span>Visible</span><span>Hidden</span><span>Runtime</span>
               </div>
               {submissionHistory.length === 0 ? (
                 <div className="history-empty">No submissions yet.</div>
@@ -547,6 +555,7 @@ function App() {
                   <span className={`history-status ${item.status}`}>{item.status.replace(/_/g, ' ')}</span>
                   <span>{item.language}</span>
                   <span>{item.visiblePassed}/{item.visibleTotal}</span>
+                  <span>{item.hiddenPassed}/{item.hiddenTotal}</span>
                   <span>{item.runtimeMs ? `${item.runtimeMs} ms` : 'N/A'}</span>
                 </button>
               ))}
@@ -649,8 +658,7 @@ function App() {
                   </button>
                 </div>
                 <div className="output-content">
-              {activeTab === 'testcases' ? (
-                customMode ? (
+              {activeTab === 'custom' ? (
                   <div className="custom-layout">
                     <div>
                       <label>Custom input</label>
@@ -668,7 +676,7 @@ function App() {
                       <pre>{running ? 'Running...' : customOutput || 'No output yet'}</pre>
                     </div>
                   </div>
-                ) : (
+              ) : activeTab === 'testcases' ? (
                 <div className="test-layout">
                   <div className="test-list">
                     {visibleTests.map((test, index) => (
@@ -696,7 +704,6 @@ function App() {
                     <div className="expected-value">{visibleTests[selectedTest]?.expectedOutput ?? ''}</div>
                   </div>
                 </div>
-                )
               ) : (
                 <div className="result-view">
                   {running ? (

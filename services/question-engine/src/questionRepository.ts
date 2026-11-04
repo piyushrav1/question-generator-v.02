@@ -172,10 +172,21 @@ export class QuestionRepository {
     )
   }
 
-  async saveSubmission(result: SubmissionResultDto): Promise<void> {
+  async saveSubmission(ownerId: string, result: SubmissionResultDto): Promise<void> {
     const db = await this.getDatabase()
     if (!db) return
-    await db.collection<SubmissionResultDto>('submissions').insertOne(result)
+    await db.collection<SubmissionResultDto & { ownerId: string }>('submissions').insertOne({ ...result, ownerId })
+  }
+
+  async findSubmissions(ownerId: string, questionId: string): Promise<SubmissionResultDto[]> {
+    const db = await this.getDatabase()
+    if (!db) return []
+    return db.collection<SubmissionResultDto & { ownerId: string }>('submissions')
+      .find({ ownerId, questionId, submitted: true })
+      .sort({ _id: -1 })
+      .limit(20)
+      .toArray()
+      .then((rows) => rows.map(({ ownerId: _ownerId, ...result }) => result))
   }
 
   private async getDatabase(): Promise<Db | undefined> {
