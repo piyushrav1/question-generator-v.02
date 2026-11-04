@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Bell, ChevronDown, Code2, Copy, Play, RefreshCw,
+  Bell, ChevronDown, ChevronUp, Code2, Copy, Play, RefreshCw,
   Sparkles, Send, Settings, Terminal, ThumbsUp, CheckCircle2,
 } from 'lucide-react'
 import { apiClient } from './services'
@@ -55,7 +55,8 @@ function App() {
       hidden: false,
     })),
   })
-  const [activeTab, setActiveTab] = useState<'testcases' | 'result'>('testcases')
+  const [activeTab, setActiveTab] = useState<'testcases' | 'custom' | 'result'>('testcases')
+  const [outputCollapsed, setOutputCollapsed] = useState(false)
   const [editorTab, setEditorTab] = useState<'solution' | 'submissions'>('solution')
   const [selectedTest, setSelectedTest] = useState(0)
   const [running, setRunning] = useState(false)
@@ -79,6 +80,7 @@ function App() {
   const runCode = () => {
     setRunning(true)
     setHasSubmitted(true)
+    setOutputCollapsed(false)
     setActiveTab('result')
     apiClient.submit({
       questionId: question.id,
@@ -116,6 +118,7 @@ function App() {
 
   const submitCode = () => {
     setRunning(true)
+    setOutputCollapsed(false)
     apiClient.submit({
       questionId: question.id,
       language,
@@ -155,6 +158,7 @@ function App() {
   const runCustomTest = () => {
     setRunning(true)
     setHasSubmitted(true)
+    setOutputCollapsed(false)
     setActiveTab('result')
     apiClient.submit({
       questionId: question.id,
@@ -282,7 +286,7 @@ function App() {
           </div>
         </section>
 
-        <section className="editor-pane">
+        <section className={`editor-pane ${outputCollapsed ? 'output-collapsed' : ''}`}>
           <div className="editor-toolbar">
             <div className="tabs">
               <button className={`tab ${editorTab === 'solution' ? 'active' : ''}`} onClick={() => setEditorTab('solution')}>Solution</button>
@@ -342,7 +346,7 @@ function App() {
             />
           </div>
 
-          <div className={`output-panel ${hasSubmitted ? '' : 'submission-hidden'}`}>
+          <div className={`output-panel ${hasSubmitted ? '' : 'submission-hidden'} ${outputCollapsed ? 'collapsed' : ''}`}>
             {!hasSubmitted ? (
               <div className="submission-placeholder">
                 <span>Submit your solution to view test cases and results.</span>
@@ -352,15 +356,34 @@ function App() {
                 <div className="output-tabs">
                   <button
                     className={activeTab === 'testcases' ? 'active' : ''}
-                    onClick={() => setActiveTab('testcases')}
+                    onClick={() => {
+                      setCustomMode(false)
+                      setActiveTab('testcases')
+                    }}
                   >
                     Test Cases
+                  </button>
+                  <button
+                    className={activeTab === 'custom' ? 'active' : ''}
+                    onClick={() => {
+                      setCustomMode(true)
+                      setActiveTab('custom')
+                    }}
+                  >
+                    Custom Test
                   </button>
                   <button
                     className={activeTab === 'result' ? 'active' : ''}
                     onClick={() => setActiveTab('result')}
                   >
                     Test Result
+                  </button>
+                  <button
+                    className="collapse-output-button"
+                    aria-label={outputCollapsed ? 'Expand test panel' : 'Collapse test panel'}
+                    onClick={() => setOutputCollapsed((collapsed) => !collapsed)}
+                  >
+                    {outputCollapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                   </button>
                 </div>
                 <div className="output-content">
@@ -393,7 +416,7 @@ function App() {
                         onClick={() => setSelectedTest(index)}
                       >
                         <CheckCircle2 size={14} />
-                        {test.name}
+                        Test Case {index + 1}
                       </button>
                     ))}
                     <button className="add-test"><span>+</span> Add test case</button>
@@ -421,7 +444,8 @@ function App() {
                       </div>
                       <div className="result-stats">
                         <div><span>Runtime</span><strong>{submissionResult?.runtimeMs ? `${submissionResult.runtimeMs} ms` : 'N/A'}</strong></div>
-                        <div><span>Passed</span><strong>{submissionResult ? `${submissionResult.visiblePassed}/${submissionResult.visibleTotal} visible` : 'N/A'}</strong></div>
+                        <div><span>Visible</span><strong>{submissionResult ? `${submissionResult.visiblePassed}/${submissionResult.visibleTotal}` : 'N/A'}</strong></div>
+                        <div><span>Hidden</span><strong>{submissionResult ? `${submissionResult.hiddenPassed}/${submissionResult.hiddenTotal}` : 'N/A'}</strong></div>
                         <div><span>Language</span><strong>{language}</strong></div>
                       </div>
                     </>
@@ -465,7 +489,8 @@ function App() {
               onClick={() => {
                 setCustomMode(true)
                 setHasSubmitted(true)
-                setActiveTab('testcases')
+                setOutputCollapsed(false)
+                setActiveTab('custom')
               }}
             >
               <Terminal size={16} /> Custom test cases

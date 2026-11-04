@@ -91,7 +91,7 @@ export class SubmissionService {
       hiddenTotal: hiddenCases.length,
       runtimeMs: runtimeValues.length ? Math.round(runtimeValues.reduce((sum, value) => sum + value, 0) / runtimeValues.length) : null,
       memoryMb: null,
-      caseResults: visiblePassed.caseResults,
+      caseResults: [...visiblePassed.caseResults, ...hiddenPassed.caseResults],
       message: status === 'accepted'
         ? 'All visible and hidden test cases passed.'
         : status === 'time_limit_exceeded'
@@ -229,7 +229,6 @@ if __name__ == "__main__":
         expectedOutput: testCase.hidden ? undefined : testCase.expectedOutput,
         runtimeMs: result.runtimeMs,
       })
-      if (timedOut || error) break
     }
 
     return { count, error, timedOut, runtimeMs, stderr, caseResults }
