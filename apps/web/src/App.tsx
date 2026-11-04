@@ -59,6 +59,7 @@ function App() {
   const [selectedTest, setSelectedTest] = useState(0)
   const [running, setRunning] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [hasSubmitted, setHasSubmitted] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState('')
   const [aiOpen, setAiOpen] = useState(true)
@@ -71,7 +72,6 @@ function App() {
 
   const runCode = () => {
     setRunning(true)
-    setActiveTab('result')
     apiClient.submit({
       questionId: question.id,
       language,
@@ -87,15 +87,22 @@ function App() {
 
   const submitCode = () => {
     setRunning(true)
-    setActiveTab('result')
     apiClient.submit({
       questionId: question.id,
       language,
       code,
       submitted: true,
     })
-      .then((result) => setSubmitted(result.status === 'accepted'))
-      .catch(() => setSubmitted(false))
+      .then((result) => {
+        setSubmitted(result.status === 'accepted')
+        setHasSubmitted(true)
+        setActiveTab('result')
+      })
+      .catch(() => {
+        setSubmitted(false)
+        setHasSubmitted(true)
+        setActiveTab('result')
+      })
       .finally(() => setRunning(false))
   }
 
@@ -107,6 +114,7 @@ function App() {
         setCode(question.starterCode?.[language] ?? starterCode[language])
         setSelectedTest(0)
         setSubmitted(false)
+        setHasSubmitted(false)
         setGenerationError('')
         setActiveTab('testcases')
       })
@@ -217,23 +225,28 @@ function App() {
             />
           </div>
 
-          <div className="output-panel">
-            <div className="output-tabs">
-              <button
-                className={activeTab === 'testcases' ? 'active' : ''}
-                onClick={() => setActiveTab('testcases')}
-              >
-                Test Cases
-              </button>
-              <button
-                className={activeTab === 'result' ? 'active' : ''}
-                onClick={() => setActiveTab('result')}
-              >
-                Test Result
-              </button>
-            </div>
-
-            <div className="output-content">
+          <div className={`output-panel ${hasSubmitted ? '' : 'submission-hidden'}`}>
+            {!hasSubmitted ? (
+              <div className="submission-placeholder">
+                <span>Submit your solution to view test cases and results.</span>
+              </div>
+            ) : (
+              <>
+                <div className="output-tabs">
+                  <button
+                    className={activeTab === 'testcases' ? 'active' : ''}
+                    onClick={() => setActiveTab('testcases')}
+                  >
+                    Test Cases
+                  </button>
+                  <button
+                    className={activeTab === 'result' ? 'active' : ''}
+                    onClick={() => setActiveTab('result')}
+                  >
+                    Test Result
+                  </button>
+                </div>
+                <div className="output-content">
               {activeTab === 'testcases' ? (
                 <div className="test-layout">
                   <div className="test-list">
@@ -290,7 +303,9 @@ function App() {
                   )}
                 </div>
               )}
-            </div>
+                </div>
+              </>
+            )}
           </div>
 
           <footer className="editor-footer">

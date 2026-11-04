@@ -114,6 +114,8 @@ button { cursor: pointer; }
 }
 
 .output-panel { min-height: 0; border-top: 1px solid #dfe5e9; display: grid; grid-template-rows: 42px 1fr; background: white; }
+.output-panel.submission-hidden { grid-template-rows: 1fr; }
+.submission-placeholder { height: 100%; display: flex; align-items: center; justify-content: center; color: #929ca4; font-size: 12px; }
 .output-tabs { height: 42px; border-bottom: 1px solid #edf0f2; display: flex; align-items: stretch; padding-left: 8px; }
 .output-tabs button {
   border: 0; border-bottom: 2px solid transparent; background: transparent; color: #89949d;
