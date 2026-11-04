@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "tsx watch server/src/index.ts",
+    "server:start": "tsx server/src/index.ts",
+    "dev:all": "concurrently -k \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
@@ -14,10 +17,16 @@
     "typescript": "~5.7.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "express": "^4.21.2",
+    "cors": "^2.8.5"
   },
   "devDependencies": {
     "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2"
+    "@types/react-dom": "^19.0.2",
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.2"
   }
 }

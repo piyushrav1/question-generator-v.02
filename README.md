@@ -60,6 +60,8 @@ Build output is generated in the `dist/` directory.
 | `npm.cmd run dev` | Start the Vite development server |
 | `npm.cmd run build` | Type-check and create a production build |
 | `npm.cmd run preview` | Preview the production build locally |
+| `npm.cmd run server` | Start the backend API with file watching |
+| `npm.cmd run dev:all` | Start the frontend and backend together |
 
 ## Project Structure
 

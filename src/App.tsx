@@ -48,24 +48,58 @@ function App() {
   const runCode = () => {
     setRunning(true)
     setActiveTab('result')
-    window.setTimeout(() => {
-      setRunning(false)
-      setSubmitted(false)
-    }, 900)
+    fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        questionId: 'demo-question',
+        language,
+        code,
+        submitted: false,
+      }),
+    })
+      .catch(() => undefined)
+      .finally(() => {
+        setRunning(false)
+        setSubmitted(false)
+      })
   }
 
   const submitCode = () => {
     setRunning(true)
     setActiveTab('result')
-    window.setTimeout(() => {
-      setRunning(false)
-      setSubmitted(true)
-    }, 1100)
+    fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        questionId: 'demo-question',
+        language,
+        code,
+        submitted: true,
+      }),
+    })
+      .then((response) => response.json())
+      .then((result) => setSubmitted(result.status === 'accepted'))
+      .catch(() => setSubmitted(false))
+      .finally(() => setRunning(false))
   }
 
   const generateQuestion = () => {
     setGenerating(true)
-    window.setTimeout(() => setGenerating(false), 1400)
+    fetch('/api/questions/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic: 'arrays', difficulty: 'medium' }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error('Unable to generate a question')
+        return response.json()
+      })
+      .then((question) => {
+        setCode(question.starterCode?.[language] ?? starterCode[language])
+      })
+      .catch(() => undefined)
+      .finally(() => setGenerating(false))
   }
 
   return (
