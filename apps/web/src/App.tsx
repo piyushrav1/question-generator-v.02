@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Bell, ChevronDown, ChevronUp, Code2, Copy, Play, RefreshCw,
-  Sparkles, Send, Settings, Terminal, ThumbsUp, CheckCircle2,
+  Sparkles, Send, Settings, Terminal, CheckCircle2, Sun, Moon, Monitor, RotateCcw, Maximize2,
 } from 'lucide-react'
+import Editor from '@monaco-editor/react'
 import { apiClient } from './services'
 import type { AttemptDto, ProgrammingLanguage, QuestionDto, SubmissionResultDto } from '../../../packages/shared/src/types'
 
@@ -65,14 +66,26 @@ function App() {
   const [submissionResult, setSubmissionResult] = useState<SubmissionResultDto | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState('')
-  const [aiOpen, setAiOpen] = useState(true)
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionResultDto[]>([])
   const [customInput, setCustomInput] = useState('')
   const [customOutput, setCustomOutput] = useState('')
   const [customMode, setCustomMode] = useState(false)
   const [activeAttempt, setActiveAttempt] = useState<AttemptDto | null>(null)
   const [draftStatus, setDraftStatus] = useState<'saved' | 'saving'>('saved')
+  const [expandedCase, setExpandedCase] = useState<string | null>(null)
   const revisionRef = useRef(1)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+  const [fontSize, setFontSize] = useState(13)
+  const [wordWrap, setWordWrap] = useState(false)
+  const [problemWidth, setProblemWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('testmeman.layout.problemWidth'))
+    return saved >= 320 && saved <= 700 ? saved : 560
+  })
+  const [outputHeight, setOutputHeight] = useState(() => {
+    const saved = Number(localStorage.getItem('testmeman.layout.outputHeight'))
+    return saved >= 170 && saved <= 500 ? saved : 220
+  })
   const visibleTests = question.testCases.filter((test) => !test.hidden)
 
   useEffect(() => {
@@ -134,6 +147,74 @@ function App() {
     }, 500)
     return () => window.clearTimeout(timer)
   }, [activeAttempt, code, language])
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('testmeman.theme') as 'light' | 'dark' | 'system' | null
+    const savedFontSize = Number(localStorage.getItem('testmeman.fontSize'))
+    const savedWrap = localStorage.getItem('testmeman.wordWrap')
+    if (savedTheme) setTheme(savedTheme)
+    if (savedFontSize >= 11 && savedFontSize <= 18) setFontSize(savedFontSize)
+    if (savedWrap) setWordWrap(savedWrap === 'true')
+  }, [])
+
+  useEffect(() => {
+    const applyTheme = () => {
+      const dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+    }
+    applyTheme()
+    localStorage.setItem('testmeman.theme', theme)
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    media.addEventListener('change', applyTheme)
+    return () => media.removeEventListener('change', applyTheme)
+  }, [theme])
+
+  useEffect(() => {
+    localStorage.setItem('testmeman.fontSize', String(fontSize))
+    localStorage.setItem('testmeman.wordWrap', String(wordWrap))
+  }, [fontSize, wordWrap])
+
+  useEffect(() => {
+    localStorage.setItem('testmeman.layout.problemWidth', String(problemWidth))
+  }, [problemWidth])
+
+  useEffect(() => {
+    localStorage.setItem('testmeman.layout.outputHeight', String(outputHeight))
+  }, [outputHeight])
+
+  const startVerticalResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = problemWidth
+    const move = (pointerEvent: PointerEvent) => {
+      setProblemWidth(Math.min(700, Math.max(320, startWidth + pointerEvent.clientX - startX)))
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+      document.body.classList.remove('resizing')
+    }
+    document.body.classList.add('resizing')
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+  }
+
+  const startHorizontalResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startY = event.clientY
+    const startHeight = outputHeight
+    const move = (pointerEvent: PointerEvent) => {
+      setOutputHeight(Math.min(500, Math.max(170, startHeight + startY - pointerEvent.clientY)))
+    }
+    const stop = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+      document.body.classList.remove('resizing')
+    }
+    document.body.classList.add('resizing')
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+  }
 
   const changeLanguage = (value: ProgrammingLanguage) => {
     setLanguage(value)
@@ -302,7 +383,7 @@ function App() {
         </div>
       </header>
 
-      <main className="workspace">
+      <main className="workspace" style={{ gridTemplateColumns: `${problemWidth}px 6px minmax(520px, 1fr)` }}>
         <section className="problem-pane">
           <div className="problem-toolbar">
             <div className="breadcrumb">
@@ -352,7 +433,27 @@ function App() {
           </div>
         </section>
 
-        <section className={`editor-pane ${outputCollapsed ? 'output-collapsed' : ''}`}>
+        <div
+          className="vertical-resizer"
+          role="separator"
+          aria-label="Resize problem and editor panels"
+          aria-orientation="vertical"
+          tabIndex={0}
+          onPointerDown={startVerticalResize}
+          onDoubleClick={() => setProblemWidth(560)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') setProblemWidth((width) => Math.max(320, width - 20))
+            if (event.key === 'ArrowRight') setProblemWidth((width) => Math.min(700, width + 20))
+          }}
+        />
+        <section
+          className="editor-pane"
+          style={{
+            gridTemplateRows: outputCollapsed
+              ? '50px minmax(260px, 1fr) 0px 42px 54px'
+              : `50px minmax(260px, 1fr) 6px ${outputHeight}px 54px`,
+          }}
+        >
           <div className="editor-toolbar">
             <div className="tabs">
               <button className={`tab ${editorTab === 'solution' ? 'active' : ''}`} onClick={() => setEditorTab('solution')}>Solution</button>
@@ -369,7 +470,58 @@ function App() {
                   <option>C++</option>
                 </select>
               </button>
-              <button className="icon-button" aria-label="Editor settings"><Settings size={17} /></button>
+              <div className="settings-wrap">
+                <button
+                  className="icon-button"
+                  aria-label="Editor settings"
+                  aria-expanded={settingsOpen}
+                  onClick={() => setSettingsOpen((open) => !open)}
+                >
+                  <Settings size={17} />
+                </button>
+                {settingsOpen && (
+                  <div className="settings-menu">
+                    <div className="settings-heading">Appearance & editor</div>
+                    <div className="theme-options" role="radiogroup" aria-label="Theme">
+                      {([
+                        ['light', 'Light', Sun],
+                        ['dark', 'Dark', Moon],
+                        ['system', 'System', Monitor],
+                      ] as const).map(([value, label, Icon]) => (
+                        <button
+                          key={value}
+                          className={theme === value ? 'active' : ''}
+                          role="radio"
+                          aria-checked={theme === value}
+                          onClick={() => setTheme(value)}
+                        >
+                          <Icon size={14} /> {label}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="settings-row">
+                      <span>Font size</span>
+                      <select value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))}>
+                        {[11, 12, 13, 14, 16, 18].map((size) => <option key={size} value={size}>{size}px</option>)}
+                      </select>
+                    </label>
+                    <label className="settings-row">
+                      <span>Word wrap</span>
+                      <input type="checkbox" checked={wordWrap} onChange={(event) => setWordWrap(event.target.checked)} />
+                    </label>
+                    <button
+                      className="reset-layout-button"
+                      onClick={() => {
+                        setProblemWidth(560)
+                        setOutputHeight(220)
+                        setOutputCollapsed(false)
+                      }}
+                    >
+                      <RotateCcw size={14} /> Reset layout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -402,17 +554,50 @@ function App() {
           ) : (
           <>
           <div className="code-area">
-            <div className="line-numbers" aria-hidden="true">
-              {code.split('\n').map((_, index) => <div key={index}>{index + 1}</div>)}
-            </div>
-            <textarea
+            <Editor
+              height="100%"
+              language={{
+                Python: 'python',
+                JavaScript: 'javascript',
+                Java: 'java',
+                'C++': 'cpp',
+              }[language]}
               value={code}
-              onChange={(event) => setCode(event.target.value)}
-              spellCheck={false}
-              aria-label="Code editor"
+              onChange={(value) => setCode(value ?? '')}
+              theme={theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'vs-dark' : 'light'}
+              options={{
+                fontSize,
+                lineNumbers: 'on',
+                minimap: { enabled: false },
+                scrollBeyondLastLine: false,
+                automaticLayout: true,
+                tabSize: 4,
+                insertSpaces: true,
+                wordWrap: wordWrap ? 'on' : 'off',
+                padding: { top: 14 },
+                fontFamily: '"JetBrains Mono", monospace',
+                suggestOnTriggerCharacters: true,
+                formatOnPaste: true,
+                smoothScrolling: true,
+              }}
             />
           </div>
 
+          {!outputCollapsed && (
+            <div
+              className="horizontal-resizer"
+              role="separator"
+              aria-label="Resize editor and test panels"
+              aria-orientation="horizontal"
+              tabIndex={0}
+              onPointerDown={startHorizontalResize}
+              onDoubleClick={() => setOutputHeight(220)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowUp') setOutputHeight((height) => Math.min(500, height + 20))
+                if (event.key === 'ArrowDown') setOutputHeight((height) => Math.max(170, height - 20))
+              }}
+            />
+          )}
           <div className={`output-panel ${hasSubmitted ? '' : 'submission-hidden'} ${outputCollapsed ? 'collapsed' : ''}`}>
             {!hasSubmitted ? (
               <div className="submission-placeholder">
@@ -451,6 +636,16 @@ function App() {
                     onClick={() => setOutputCollapsed((collapsed) => !collapsed)}
                   >
                     {outputCollapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                  </button>
+                  <button
+                    className="maximize-output-button"
+                    aria-label="Maximize test panel"
+                    onClick={() => {
+                      setOutputCollapsed(false)
+                      setOutputHeight((height) => height >= 500 ? 220 : 500)
+                    }}
+                  >
+                    <Maximize2 size={14} />
                   </button>
                 </div>
                 <div className="output-content">
@@ -492,7 +687,10 @@ function App() {
                     <label>Input</label>
                     <div className="test-value">
                       <code>{visibleTests[selectedTest]?.input ?? ''}</code>
-                      <button aria-label="Copy input"><Copy size={14} /></button>
+                      <button
+                        aria-label="Copy input"
+                        onClick={() => navigator.clipboard.writeText(visibleTests[selectedTest]?.input ?? '')}
+                      ><Copy size={14} /></button>
                     </div>
                     <label>Expected output</label>
                     <div className="expected-value">{visibleTests[selectedTest]?.expectedOutput ?? ''}</div>
@@ -532,13 +730,24 @@ function App() {
                       {!running && submissionResult?.caseResults && submissionResult.caseResults.length > 0 && (
                         <div className="case-results">
                           {submissionResult.caseResults.map((test, index) => (
-                            <div className="case-result-row" key={`${test.id}-${index}`}>
-                              <span className={`case-status ${test.status}`}>
-                                {test.status === 'passed' ? <CheckCircle2 size={14} /> : <Terminal size={14} />}
-                                {test.name}
-                              </span>
-                              {test.actualOutput !== undefined && <code>{test.actualOutput || '(empty output)'}</code>}
-                              <span>{test.runtimeMs} ms</span>
+                            <div className="case-result" key={`${test.id}-${index}`}>
+                              <button
+                                className="case-result-row"
+                                onClick={() => setExpandedCase((current) => current === `${test.id}-${index}` ? null : `${test.id}-${index}`)}
+                              >
+                                <span className={`case-status ${test.status}`}>
+                                  {test.status === 'passed' ? <CheckCircle2 size={14} /> : <Terminal size={14} />}
+                                  {test.hidden ? `Hidden Test ${index + 1}` : `Test Case ${index + 1}`}
+                                </span>
+                                <span>{test.status.replace(/_/g, ' ')}</span>
+                                <span>{test.runtimeMs} ms</span>
+                              </button>
+                              {expandedCase === `${test.id}-${index}` && (
+                                <div className="case-result-details">
+                                  {test.expectedOutput !== undefined && <div><span>Expected</span><code>{test.expectedOutput}</code></div>}
+                                  {test.actualOutput !== undefined && <div><span>Actual</span><code>{test.actualOutput || '(empty output)'}</code></div>}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -576,26 +785,6 @@ function App() {
           )}
         </section>
 
-        {aiOpen && (
-          <aside className="ai-panel">
-            <div className="ai-heading">
-              <div><Sparkles size={17} /><strong>AI Tutor</strong></div>
-              <button onClick={() => setAiOpen(false)} aria-label="Close AI tutor">×</button>
-            </div>
-            <div className="ai-message">
-              <p>I generated this problem for your <strong>arrays</strong> practice session.</p>
-              <p>Would you like a hint, or should I review your approach once you have tried it?</p>
-            </div>
-            <div className="ai-actions">
-              <button>Give me a hint</button>
-              <button>Explain concepts</button>
-            </div>
-            <div className="ai-input">
-              <input placeholder="Ask about this problem..." />
-              <button aria-label="Send message"><Send size={15} /></button>
-            </div>
-          </aside>
-        )}
       </main>
     </div>
   )
