@@ -7,24 +7,21 @@ TestMeMan is organized as one repository containing an independent React fronten
 ## Repository Structure
 
 ```text
-src/                    React frontend
-shared/types.ts         Contracts shared by the frontend and backend
-server/src/app.ts       Express application composition
-server/src/config/     Environment and runtime configuration
-server/src/routes/     HTTP endpoints
-server/src/middleware/ Validation and error handling
-server/src/services/   Business logic
-server/src/repositories/ Data access
+apps/web/src/           React frontend
+apps/api/server/src/    Express API application
+services/question-engine/ Question generation and validation
+services/execution-engine/ Submission evaluation integration
+packages/shared/src/    Contracts shared by frontend and backend
 ```
 
 ## Frontend Responsibilities
 
 - Render the coding workspace.
 - Maintain editor and workspace state.
-- Call the backend through `src/services/apiClient.ts`.
+- Call the backend through `apps/web/src/services/apiClient.ts`.
 - Keep UI components free from direct API formatting and transport details.
 
-UI code should use shared TypeScript contracts in `shared/types.ts` rather than defining independent response shapes.
+UI code should use shared TypeScript contracts in `packages/shared/src/types.ts` rather than defining independent response shapes.
 
 ## Backend Responsibilities
 
@@ -40,7 +37,7 @@ Routes should remain thin. Domain behavior belongs in service classes, while per
 
 ### AI Provider
 
-Replace question generation inside `QuestionService` and its repository with an adapter for the selected AI provider. Preserve the structured output contract from `shared/types.ts`.
+Replace question generation inside `QuestionService` and its repository with an adapter for the selected AI provider. Preserve the structured output contract from `packages/shared/src/types.ts`.
 
 ### Code Execution
 
@@ -54,7 +51,7 @@ The current in-memory repository is suitable for local development and demonstra
 
 ```text
 Browser
-  -> src/services/apiClient.ts
+  -> apps/web/src/services/apiClient.ts
   -> Express route
   -> request validation
   -> service

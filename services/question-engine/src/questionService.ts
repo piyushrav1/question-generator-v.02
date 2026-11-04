@@ -1,6 +1,6 @@
-import type { Difficulty, QuestionDto } from '../../../shared/types.js'
-import { QuestionRepository } from '../repositories/questionRepository.js'
-import { HttpError } from '../errors/httpError.js'
+import type { Difficulty, QuestionDto } from '../../../packages/shared/src/types.js'
+import { QuestionRepository } from './questionRepository.js'
+import { HttpError } from '../../../packages/shared/src/errors/httpError.js'
 
 export class QuestionService {
   constructor(private readonly repository: QuestionRepository) {}

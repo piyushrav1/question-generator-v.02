@@ -1,6 +1,6 @@
-import type { SubmissionRequest, SubmissionResultDto } from '../../../shared/types.js'
-import { QuestionRepository } from '../repositories/questionRepository.js'
-import { HttpError } from '../errors/httpError.js'
+import type { SubmissionRequest, SubmissionResultDto } from '../../../packages/shared/src/types.js'
+import { QuestionRepository } from '../../question-engine/src/questionRepository.js'
+import { HttpError } from '../../../packages/shared/src/errors/httpError.js'
 
 export class SubmissionService {
   constructor(private readonly repository: QuestionRepository) {}

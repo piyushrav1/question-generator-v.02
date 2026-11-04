@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express'
-import { HttpError } from '../errors/httpError.js'
+import { HttpError } from '../../../../../packages/shared/src/errors/httpError.js'
 import { logger } from '../config/logger.js'
 
 export function errorHandler(error: unknown, _request: Request, response: Response, _next: NextFunction) {

@@ -6,12 +6,12 @@ import { env } from './config/env.js'
 import { logger } from './config/logger.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { notFoundHandler } from './middleware/notFoundHandler.js'
-import { QuestionRepository } from './repositories/questionRepository.js'
+import { QuestionRepository } from '../../../../services/question-engine/src/questionRepository.js'
 import { createQuestionRouter } from './routes/questionRoutes.js'
 import { healthRouter } from './routes/healthRoutes.js'
 import { createSubmissionRouter } from './routes/submissionRoutes.js'
-import { QuestionService } from './services/questionService.js'
-import { SubmissionService } from './services/submissionService.js'
+import { QuestionService } from '../../../../services/question-engine/src/questionService.js'
+import { SubmissionService } from '../../../../services/execution-engine/src/submissionService.js'
 
 export function createApp() {
   const app = express()

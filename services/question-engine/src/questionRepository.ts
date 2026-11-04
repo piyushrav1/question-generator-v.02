@@ -1,4 +1,4 @@
-import type { Difficulty, ProgrammingLanguage, QuestionDto, TestCaseDto } from '../../../shared/types.js'
+import type { Difficulty, ProgrammingLanguage, QuestionDto, TestCaseDto } from '../../../packages/shared/src/types.js'
 
 const starterCode: Record<ProgrammingLanguage, string> = {
   Python: 'def smallest_missing_positive(nums):\n    # Write your solution here\n    pass',

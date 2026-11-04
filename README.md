@@ -27,7 +27,8 @@ The frontend is implemented and runnable. The API currently uses an in-memory de
 
 ```powershell
 npm.cmd install
-Copy-Item .env.example .env
+Copy-Item apps/api/.env.example apps/api/.env
+Copy-Item apps/web/.env.example apps/web/.env
 ```
 
 ### Run Frontend and API
@@ -61,38 +62,37 @@ npm.cmd run server
 ## Project Layout
 
 ```text
-src/
-  main.tsx             React entry point
-  App.tsx              Coding workspace composition
-  services/            Frontend API integration
-  styles.css           Application styles
+apps/
+  web/                 React frontend application
+  api/                 Express API application
 
-shared/
-  types.ts             Shared API request and response contracts
+services/
+  question-engine/     AI question generation and validation
+  execution-engine/    Submission execution and evaluation integration
 
-server/src/
-  app.ts               Express composition
-  index.ts             Process entry point
-  config/              Environment and logger configuration
-  routes/              HTTP route definitions
-  middleware/          Validation and error handling
-  services/            Business logic
-  repositories/        Data-access implementations
+packages/
+  packages/shared/      API contracts and shared domain utilities
+  ui/                  Reusable frontend components and UI primitives
+
+infra/
+  docker/              Container configuration
 
 docs/
-  See ARCHITECTURE.md and API.md
+  architecture/        Architecture documentation
+
+scripts/               Repository automation
 ```
 
 Additional files:
 
-- [Architecture](ARCHITECTURE.md)
-- [API reference](API.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [Platform roadmap](AI-Coding-Practice-Platform-Plan.md)
+- [Architecture](docs/architecture/README.md)
+- [API reference](docs/API.md)
+- [Contributing guide](docs/CONTRIBUTING.md)
+- [Platform roadmap](docs/PLATFORM-ROADMAP.md)
 
 ## Configuration
 
-Copy `.env.example` to `.env` and change values for your environment.
+Copy the environment templates into `apps/api/.env` and `apps/web/.env`, then change values for your environment.
 
 Frontend variables are declared by the application through Vite. API variables are read by the server configuration module.
 

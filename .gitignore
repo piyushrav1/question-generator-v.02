@@ -7,3 +7,4 @@ dist/
 dist-server/
 coverage/
 .DS_Store
+apps/*/dist/

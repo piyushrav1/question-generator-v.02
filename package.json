@@ -1,15 +1,20 @@
 {
-  "name": "ai-coding-practice-platform",
+  "name": "testmeman-platform",
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "typecheck": "tsc -b && tsc -p tsconfig.server.json",
-    "preview": "vite preview",
-    "server": "tsx watch server/src/index.ts",
-    "server:start": "tsx server/src/index.ts",
+    "dev": "vite apps/web --config apps/web/vite.config.ts",
+    "build": "tsc -b apps/web/tsconfig.app.json && vite build apps/web --config apps/web/vite.config.ts",
+    "typecheck": "tsc -b apps/web/tsconfig.app.json && tsc -p apps/api/tsconfig.server.json",
+    "preview": "vite preview apps/web --config apps/web/vite.config.ts",
+    "server": "tsx watch apps/api/server/src/index.ts",
+    "server:start": "tsx apps/api/server/src/index.ts",
     "dev:all": "concurrently -k \"npm run server\" \"npm run dev\"",
     "check": "npm run typecheck && npm run build"
   },

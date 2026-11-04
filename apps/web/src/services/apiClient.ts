@@ -1,4 +1,4 @@
-import type { GenerateQuestionRequest, QuestionDto, SubmissionRequest, SubmissionResultDto } from '../../shared/types'
+import type { GenerateQuestionRequest, QuestionDto, SubmissionRequest, SubmissionResultDto } from '../../../../packages/shared/src/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? ''
 

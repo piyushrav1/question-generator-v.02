@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { PROGRAMMING_LANGUAGES } from '../../../shared/types.js'
+import { PROGRAMMING_LANGUAGES } from '../../../../../packages/shared/src/types.js'
 import { validateBody } from '../middleware/validateRequest.js'
-import { SubmissionService } from '../services/submissionService.js'
+import { SubmissionService } from '../../../../../services/execution-engine/src/submissionService.js'
 
 const submissionSchema = z.object({
   questionId: z.string().trim().min(1).max(100),

@@ -4,7 +4,8 @@
 
 ```powershell
 npm.cmd install
-cp .env.example .env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
 npm.cmd run dev:all
 ```
 
@@ -21,11 +22,11 @@ npm.cmd run dev:all
 
 ## Change Boundaries
 
-- `src/` owns browser presentation and client state.
-- `server/src/routes/` owns endpoint composition.
-- `server/src/services/` owns application behavior.
-- `server/src/repositories/` owns persistence access.
-- `shared/types.ts` owns cross-layer API contracts.
+- `apps/web/src/` owns browser presentation and client state.
+- `apps/api/server/src/routes/` owns endpoint composition.
+- `services/question-engine/` owns question generation behavior.
+- `services/execution-engine/` owns submission evaluation behavior.
+- `packages/shared/src/types.ts` owns cross-layer API contracts.
 
 Avoid importing Express or HTTP types from a business service. Avoid placing persistence logic in route handlers.
 

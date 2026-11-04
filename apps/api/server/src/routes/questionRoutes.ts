@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { DIFFICULTIES } from '../../../shared/types.js'
+import { DIFFICULTIES } from '../../../../../packages/shared/src/types.js'
 import { validateBody } from '../middleware/validateRequest.js'
-import { QuestionService } from '../services/questionService.js'
+import { QuestionService } from '../../../../../services/question-engine/src/questionService.js'
 
 const generateSchema = z.object({
   topic: z.string().trim().min(1).max(50).default('arrays'),
