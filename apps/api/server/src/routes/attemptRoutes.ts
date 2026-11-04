@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
-import { DIFFICULTIES, PROGRAMMING_LANGUAGES, type AttemptDto } from '../../../../../packages/shared/src/types.js'
+import { DIFFICULTIES, PROGRAMMING_LANGUAGES, type AttemptDto, type ProgrammingLanguage } from '../../../../../packages/shared/src/types.js'
 import { QuestionRepository } from '../../../../../services/question-engine/src/questionRepository.js'
 import { QuestionService } from '../../../../../services/question-engine/src/questionService.js'
 import { validateBody } from '../middleware/validateRequest.js'
@@ -16,6 +16,7 @@ const draftSchema = z.object({
 const newAttemptSchema = z.object({
   topic: z.string().trim().min(1).max(50).default('arrays'),
   difficulty: z.enum(DIFFICULTIES).default('medium'),
+  language: z.enum(PROGRAMMING_LANGUAGES).default('Python'),
 })
 
 export function getOwnerId(request: Request, response: Response): string {
@@ -63,13 +64,24 @@ export function createAttemptRouter(repository: QuestionRepository, questionServ
     }
   })
 
+  router.get('/resume', async (request, response, next) => {
+    try {
+      const ownerId = getOwnerId(request, response)
+      const attempt = await repository.findActiveAttempt(ownerId)
+      response.json(attempt ? publicAttempt(attempt) : null)
+    } catch (error) {
+      next(error)
+    }
+  })
+
   router.post('/new', validateBody(newAttemptSchema), async (request, response, next) => {
     try {
       const ownerId = getOwnerId(request, response)
       const active = await repository.findActiveAttempt(ownerId)
       if (active) await repository.abandonAttempt(ownerId, active.id)
       const question = await questionService.generate(request.body.topic, request.body.difficulty)
-      const attempt = await repository.createAttempt(ownerId, question, 'Python', question.starterCode.Python)
+      const language = request.body.language as ProgrammingLanguage
+      const attempt = await repository.createAttempt(ownerId, question, language, question.starterCode[language])
       response.status(201).json(publicAttempt(attempt))
     } catch (error) {
       next(error)

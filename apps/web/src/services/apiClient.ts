@@ -37,6 +37,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const apiClient = {
   health: () => request<{ status: string }>('/api/health'),
   getActiveAttempt: () => request<AttemptDto>('/api/attempts/active'),
+  resumeActiveAttempt: () => request<AttemptDto | null>('/api/attempts/resume'),
   createNewAttempt: (input: GenerateQuestionRequest = {}) =>
     request<AttemptDto>('/api/attempts/new', {
       method: 'POST',

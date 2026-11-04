@@ -27,6 +27,7 @@ export interface QuestionDto {
 export interface GenerateQuestionRequest {
   topic?: string
   difficulty?: Difficulty
+  language?: ProgrammingLanguage
 }
 
 export interface SubmissionRequest {

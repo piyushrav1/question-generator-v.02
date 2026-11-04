@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Bell, ChevronDown, ChevronUp, Code2, Copy, Play, RefreshCw,
   Sparkles, Send, Settings, Terminal, CheckCircle2, Sun, Moon, Monitor, RotateCcw, Maximize2,
+  ArrowRight, Layers3, Clock3, Trophy, Shuffle,
 } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import { apiClient } from './services'
@@ -33,7 +34,35 @@ const sampleTests = [
   { name: 'Test Case 2', input: '[7, 8, 9, 11, 12]', output: '1', status: 'passed' },
 ]
 
+const practiceCategories = [
+  { id: 'arrays', name: 'Arrays', description: 'Indexing, two pointers, and sliding windows', icon: Layers3 },
+  { id: 'strings', name: 'Strings', description: 'Parsing, matching, and string transforms', icon: Code2 },
+  { id: 'linked-lists', name: 'Linked Lists', description: 'Pointers, cycles, and list manipulation', icon: Layers3 },
+  { id: 'stacks', name: 'Stacks & Queues', description: 'Ordered processing and monotonic structures', icon: Terminal },
+  { id: 'trees', name: 'Trees', description: 'Traversals, recursion, and BSTs', icon: Layers3 },
+  { id: 'graphs', name: 'Graphs', description: 'Shortest paths, traversal, and connectivity', icon: Sparkles },
+  { id: 'dynamic-programming', name: 'Dynamic Programming', description: 'Optimization with overlapping subproblems', icon: Trophy },
+  { id: 'sorting-searching', name: 'Sorting & Searching', description: 'Binary search and efficient ordering', icon: Shuffle },
+  { id: 'recursion', name: 'Recursion', description: 'Divide, conquer, and backtracking', icon: RefreshCw },
+  { id: 'hashing', name: 'Hashing', description: 'Maps, sets, and frequency analysis', icon: Layers3 },
+  { id: 'math', name: 'Math', description: 'Number theory and arithmetic reasoning', icon: Sparkles },
+  { id: 'bit-manipulation', name: 'Bit Manipulation', description: 'Bitmasks and binary operations', icon: Terminal },
+] as const
+
 function App() {
+  const [practiceView, setPracticeView] = useState<'landing' | 'workspace'>(
+    localStorage.getItem('testmeman.hasVisited') === 'true' ? 'workspace' : 'landing',
+  )
+  const [selectedTopic, setSelectedTopic] = useState<string>(
+    localStorage.getItem('testmeman.preferredTopic') || 'arrays',
+  )
+  const [selectedDifficulty, setSelectedDifficulty] = useState<'easy' | 'medium' | 'hard'>(
+    (localStorage.getItem('testmeman.preferredDifficulty') as 'easy' | 'medium' | 'hard') || 'medium',
+  )
+  const [selectedLanguage, setSelectedLanguage] = useState<ProgrammingLanguage>(
+    (localStorage.getItem('testmeman.preferredLanguage') as ProgrammingLanguage) || 'Python',
+  )
+  const [resumeAttempt, setResumeAttempt] = useState<AttemptDto | null>(null)
   const [language, setLanguage] = useState<ProgrammingLanguage>('Python')
   const [code, setCode] = useState(starterCode.Python)
   const [question, setQuestion] = useState<QuestionDto>({
@@ -89,6 +118,22 @@ function App() {
   const visibleTests = question.testCases.filter((test) => !test.hidden)
 
   useEffect(() => {
+    if (practiceView !== 'landing') return
+    let cancelled = false
+    apiClient.resumeActiveAttempt()
+      .then((attempt) => {
+        if (!cancelled) setResumeAttempt(attempt)
+      })
+      .catch(() => {
+        if (!cancelled) setResumeAttempt(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [practiceView])
+
+  useEffect(() => {
+    if (practiceView !== 'workspace') return
     let cancelled = false
     apiClient.getActiveAttempt()
       .then((attempt) => {
@@ -130,7 +175,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [practiceView])
 
   useEffect(() => {
     if (!activeAttempt) return
@@ -227,6 +272,46 @@ function App() {
   const changeLanguage = (value: ProgrammingLanguage) => {
     setLanguage(value)
     setCode(question.starterCode[value] || starterCode[value])
+  }
+
+  const startPractice = () => {
+    setGenerating(true)
+    setGenerationError('')
+    localStorage.setItem('testmeman.hasVisited', 'true')
+    localStorage.setItem('testmeman.preferredTopic', selectedTopic)
+    localStorage.setItem('testmeman.preferredDifficulty', selectedDifficulty)
+    localStorage.setItem('testmeman.preferredLanguage', selectedLanguage)
+    apiClient.createNewAttempt({
+      topic: selectedTopic,
+      difficulty: selectedDifficulty,
+      language: selectedLanguage,
+    })
+      .then((attempt) => {
+        setActiveAttempt(attempt)
+        setQuestion(attempt.question)
+        setLanguage(attempt.language)
+        setCode(attempt.question.starterCode?.[attempt.language] ?? starterCode[attempt.language])
+        revisionRef.current = attempt.revision + 1
+        setSelectedTest(0)
+        setSubmitted(false)
+        setSubmissionResult(null)
+        setSubmissionHistory([])
+        setHasSubmitted(false)
+        setActiveTab('testcases')
+        setCustomMode(false)
+        setCustomInput('')
+        setCustomOutput('')
+        setPracticeView('workspace')
+      })
+      .catch((error) => {
+        setGenerationError(error instanceof Error ? error.message : 'Question generation failed.')
+      })
+      .finally(() => setGenerating(false))
+  }
+
+  const resumePractice = () => {
+    localStorage.setItem('testmeman.hasVisited', 'true')
+    setPracticeView('workspace')
   }
 
   const runCode = () => {
@@ -349,7 +434,11 @@ function App() {
 
   const generateQuestion = () => {
     setGenerating(true)
-    apiClient.createNewAttempt({ topic: 'arrays', difficulty: 'medium' })
+    apiClient.createNewAttempt({
+      topic: selectedTopic,
+      difficulty: selectedDifficulty,
+      language: selectedLanguage,
+    })
       .then((attempt) => {
         setActiveAttempt(attempt)
         setQuestion(attempt.question)
@@ -372,13 +461,154 @@ function App() {
       .finally(() => setGenerating(false))
   }
 
+  if (practiceView === 'landing') {
+    const selectedCategory = practiceCategories.find((category) => category.id === selectedTopic) ?? practiceCategories[0]
+    const LandingIcon = selectedCategory.icon
+
+    return (
+      <main className="landing-page">
+        <header className="landing-header">
+          <button className="landing-brand" onClick={() => setPracticeView('landing')} aria-label="TestMeMan home">
+            <span className="brand-mark"><Code2 size={20} strokeWidth={2.5} /></span>
+            <span>TestMeMan</span>
+          </button>
+          <div className="landing-header-actions">
+            <button
+              className="landing-theme-button"
+              aria-label="Toggle theme"
+              onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
+            >
+              {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+          </div>
+        </header>
+
+        <div className="landing-content">
+          <section className="landing-hero">
+            <div className="landing-kicker"><Sparkles size={14} /> AI-powered coding practice</div>
+            <h1>Build stronger algorithms,<br /><span>one challenge at a time.</span></h1>
+            <p>Choose your topic and difficulty. TestMeMan will generate a focused coding challenge with visible and hidden test cases.</p>
+
+            {resumeAttempt && (
+              <button className="continue-card" onClick={resumePractice}>
+                <div className="continue-icon"><Clock3 size={18} /></div>
+                <div>
+                  <span>Continue where you left off</span>
+                  <strong>{resumeAttempt.question.title}</strong>
+                </div>
+                <ArrowRight size={18} />
+              </button>
+            )}
+
+            <div className="hero-preview">
+              <div className="preview-topline">
+                <span className="preview-dot red" /><span className="preview-dot yellow" /><span className="preview-dot green" />
+                <span>AI Challenge</span>
+              </div>
+              <div className="preview-body">
+                <div className="preview-category"><LandingIcon size={15} /> {selectedCategory.name}</div>
+                <strong>{selectedDifficulty === 'hard' ? 'Optimize the complete solution' : selectedDifficulty === 'easy' ? 'Solve the core problem' : 'Design an efficient approach'}</strong>
+                <div className="preview-tags">
+                  <span>{selectedDifficulty}</span><span>{selectedLanguage}</span><span>Hidden tests</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="practice-selector" aria-label="Practice configuration">
+            <div className="selector-heading">
+              <span>01</span>
+              <div><strong>Choose a category</strong><small>Select the skill you want to practice</small></div>
+            </div>
+            <div className="category-grid" role="radiogroup" aria-label="Coding category">
+              {practiceCategories.map((category) => {
+                const Icon = category.icon
+                const selected = selectedTopic === category.id
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={`category-card ${selected ? 'selected' : ''}`}
+                    onClick={() => setSelectedTopic(category.id)}
+                  >
+                    <span className="category-icon"><Icon size={18} /></span>
+                    <span className="category-copy"><strong>{category.name}</strong><small>{category.description}</small></span>
+                    <span className="selection-check"><CheckCircle2 size={16} /></span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="selector-row">
+              <div>
+                <div className="selector-heading compact">
+                  <span>02</span>
+                  <div><strong>Difficulty</strong><small>Choose your challenge level</small></div>
+                </div>
+                <div className="difficulty-options" role="radiogroup" aria-label="Difficulty">
+                  {(['easy', 'medium', 'hard'] as const).map((difficulty) => (
+                    <button
+                      key={difficulty}
+                      type="button"
+                      role="radio"
+                      aria-checked={selectedDifficulty === difficulty}
+                      className={selectedDifficulty === difficulty ? 'active' : ''}
+                      onClick={() => setSelectedDifficulty(difficulty)}
+                    >
+                      <span className={`difficulty-dot ${difficulty}`} />
+                      {difficulty[0].toUpperCase() + difficulty.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="selector-heading compact">
+                  <span>03</span>
+                  <div><strong>Language</strong><small>Select your editor language</small></div>
+                </div>
+                <div className="language-options" role="radiogroup" aria-label="Programming language">
+                  {(['Python', 'JavaScript', 'Java', 'C++'] as const).map((languageOption) => (
+                    <button
+                      key={languageOption}
+                      type="button"
+                      role="radio"
+                      aria-checked={selectedLanguage === languageOption}
+                      className={selectedLanguage === languageOption ? 'active' : ''}
+                      onClick={() => setSelectedLanguage(languageOption)}
+                    >
+                      {languageOption === 'C++' ? 'C++' : languageOption}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {generationError && <div className="landing-generation-error" role="alert">{generationError}</div>}
+            <button className="start-practice-button" onClick={startPractice} disabled={generating}>
+              {generating ? <RefreshCw size={18} className="spin" /> : <Sparkles size={18} />}
+              {generating ? 'Generating your challenge...' : 'Start Practicing'}
+              {!generating && <ArrowRight size={18} />}
+            </button>
+          </section>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand">
+        <button
+          className="brand workspace-brand-button"
+          type="button"
+          aria-label="Open practice landing page"
+          onClick={() => setPracticeView('landing')}
+        >
           <div className="brand-mark"><Code2 size={20} strokeWidth={2.5} /></div>
           <span>TestMeMan</span>
-        </div>
+        </button>
         <nav className="main-nav">
           <a href="#">Practice</a>
           <a href="#">Compete</a>
