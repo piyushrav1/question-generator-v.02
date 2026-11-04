@@ -142,6 +142,7 @@ button { cursor: pointer; }
 .result-view { padding: 14px 16px; }
 .result-summary { height: 52px; border-radius: 7px; display: flex; align-items: center; gap: 10px; padding: 0 12px; }
 .result-summary.success { background: #eff8f4; color: #16825d; }
+.result-summary.error { background: #fff3f0; color: #b42318; }
 .result-summary div { display: flex; flex-direction: column; }
 .result-summary strong { font-size: 13px; }
 .result-summary span { margin-top: 3px; color: #789087; font-size: 11px; }

@@ -21,7 +21,7 @@ export function createApp() {
     ? new GeminiQuestionProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL)
     : undefined
   const questionService = new QuestionService(repository, questionProvider)
-  const submissionService = new SubmissionService(repository)
+  const submissionService = new SubmissionService(repository, undefined, env.EXECUTION_TIMEOUT_MS)
 
   app.disable('x-powered-by')
   app.use(helmet())

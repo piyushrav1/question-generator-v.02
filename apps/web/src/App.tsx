@@ -4,7 +4,7 @@ import {
   Sparkles, Send, Settings, Terminal, ThumbsUp, CheckCircle2,
 } from 'lucide-react'
 import { apiClient } from './services'
-import type { ProgrammingLanguage, QuestionDto } from '../../../packages/shared/src/types'
+import type { ProgrammingLanguage, QuestionDto, SubmissionResultDto } from '../../../packages/shared/src/types'
 
 const starterCode: Record<string, string> = {
   Python: `def smallest_missing_positive(nums):
@@ -60,6 +60,7 @@ function App() {
   const [running, setRunning] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [hasSubmitted, setHasSubmitted] = useState(false)
+  const [submissionResult, setSubmissionResult] = useState<SubmissionResultDto | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState('')
   const [aiOpen, setAiOpen] = useState(true)
@@ -95,11 +96,13 @@ function App() {
     })
       .then((result) => {
         setSubmitted(result.status === 'accepted')
+        setSubmissionResult(result)
         setHasSubmitted(true)
         setActiveTab('result')
       })
       .catch(() => {
         setSubmitted(false)
+        setSubmissionResult(null)
         setHasSubmitted(true)
         setActiveTab('result')
       })
@@ -114,6 +117,7 @@ function App() {
         setCode(question.starterCode?.[language] ?? starterCode[language])
         setSelectedTest(0)
         setSubmitted(false)
+        setSubmissionResult(null)
         setHasSubmitted(false)
         setGenerationError('')
         setActiveTab('testcases')
@@ -280,24 +284,24 @@ function App() {
                     <>
                       <div className="result-summary success">
                         <CheckCircle2 size={20} />
-                        <div><strong>Accepted</strong><span>All 12 test cases passed</span></div>
+                        <div><strong>Accepted</strong><span>{submissionResult?.message}</span></div>
                       </div>
                       <div className="result-stats">
-                        <div><span>Runtime</span><strong>42 ms</strong></div>
-                        <div><span>Memory</span><strong>18.4 MB</strong></div>
+                        <div><span>Runtime</span><strong>{submissionResult?.runtimeMs ? `${submissionResult.runtimeMs} ms` : 'N/A'}</strong></div>
+                        <div><span>Passed</span><strong>{submissionResult ? `${submissionResult.visiblePassed}/${submissionResult.visibleTotal} visible` : 'N/A'}</strong></div>
                         <div><span>Language</span><strong>{language}</strong></div>
                       </div>
                     </>
                   ) : (
                     <>
-                      <div className="result-summary success">
-                        <CheckCircle2 size={20} />
-                        <div><strong>Sample tests passed</strong><span>3 of 3 test cases</span></div>
+                      <div className="result-summary error">
+                        <Terminal size={20} />
+                        <div><strong>{submissionResult?.status === 'time_limit_exceeded' ? 'Time Limit Exceeded' : submissionResult?.status === 'runtime_error' ? 'Runtime Error' : 'Wrong Answer'}</strong><span>{submissionResult?.message ?? 'Submission failed.'}</span></div>
                       </div>
                       <div className="result-stats">
-                        <div><span>Runtime</span><strong>38 ms</strong></div>
-                        <div><span>Memory</span><strong>18.1 MB</strong></div>
-                        <div><span>Status</span><strong>Ready</strong></div>
+                        <div><span>Visible</span><strong>{submissionResult ? `${submissionResult.visiblePassed}/${submissionResult.visibleTotal}` : 'N/A'}</strong></div>
+                        <div><span>Hidden</span><strong>{submissionResult ? `${submissionResult.hiddenPassed}/${submissionResult.hiddenTotal}` : 'N/A'}</strong></div>
+                        <div><span>Language</span><strong>{language}</strong></div>
                       </div>
                     </>
                   )}

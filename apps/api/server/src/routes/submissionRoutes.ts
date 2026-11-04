@@ -14,8 +14,12 @@ const submissionSchema = z.object({
 export function createSubmissionRouter(service: SubmissionService): Router {
   const router = Router()
 
-  router.post('/', validateBody(submissionSchema), (request, response) => {
-    response.status(201).json(service.evaluate(request.body))
+  router.post('/', validateBody(submissionSchema), async (request, response, next) => {
+    try {
+      response.status(201).json(await service.evaluate(request.body))
+    } catch (error) {
+      next(error)
+    }
   })
 
   return router
