@@ -12,9 +12,13 @@ const generateSchema = z.object({
 export function createQuestionRouter(service: QuestionService): Router {
   const router = Router()
 
-  router.post('/generate', validateBody(generateSchema), (request, response) => {
-    const result = service.generate(request.body.topic, request.body.difficulty)
-    response.status(201).json(result)
+  router.post('/generate', validateBody(generateSchema), async (request, response, next) => {
+    try {
+      const result = await service.generate(request.body.topic, request.body.difficulty)
+      response.status(201).json(result)
+    } catch (error) {
+      next(error)
+    }
   })
 
   router.get('/:id', (request, response) => {

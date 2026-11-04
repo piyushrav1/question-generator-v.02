@@ -4,7 +4,7 @@ import {
   Sparkles, Send, Settings, Terminal, ThumbsUp, CheckCircle2,
 } from 'lucide-react'
 import { apiClient } from './services'
-import type { ProgrammingLanguage } from './types'
+import type { ProgrammingLanguage, QuestionDto } from '../../../packages/shared/src/types'
 
 const starterCode: Record<string, string> = {
   Python: `def smallest_missing_positive(nums):
@@ -35,23 +35,45 @@ const sampleTests = [
 function App() {
   const [language, setLanguage] = useState<ProgrammingLanguage>('Python')
   const [code, setCode] = useState(starterCode.Python)
+  const [question, setQuestion] = useState<QuestionDto>({
+    id: 'demo-question',
+    title: 'Find the Smallest Missing Positive',
+    difficulty: 'medium',
+    topic: 'arrays',
+    statement: 'Given an unsorted integer array nums, return the smallest positive integer that is missing.',
+    constraints: ['1 <= nums.length <= 10^5', '-2^31 <= nums[i] <= 2^31 - 1'],
+    examples: [
+      { input: '[1, 3, 6, 4, 1, 2]', output: '5' },
+      { input: '[1, 2, 0]', output: '3' },
+    ],
+    starterCode: starterCode as QuestionDto['starterCode'],
+    testCases: sampleTests.map((test, index) => ({
+      id: String(index),
+      name: test.name,
+      input: test.input,
+      expectedOutput: test.output,
+      hidden: false,
+    })),
+  })
   const [activeTab, setActiveTab] = useState<'testcases' | 'result'>('testcases')
   const [selectedTest, setSelectedTest] = useState(0)
   const [running, setRunning] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [generationError, setGenerationError] = useState('')
   const [aiOpen, setAiOpen] = useState(true)
+  const visibleTests = question.testCases.filter((test) => !test.hidden)
 
   const changeLanguage = (value: ProgrammingLanguage) => {
     setLanguage(value)
-    setCode(starterCode[value])
+    setCode(question.starterCode[value] || starterCode[value])
   }
 
   const runCode = () => {
     setRunning(true)
     setActiveTab('result')
     apiClient.submit({
-      questionId: 'demo-question',
+      questionId: question.id,
       language,
       code,
       submitted: false,
@@ -67,7 +89,7 @@ function App() {
     setRunning(true)
     setActiveTab('result')
     apiClient.submit({
-      questionId: 'demo-question',
+      questionId: question.id,
       language,
       code,
       submitted: true,
@@ -81,9 +103,16 @@ function App() {
     setGenerating(true)
     apiClient.generateQuestion({ topic: 'arrays', difficulty: 'medium' })
       .then((question) => {
+        setQuestion(question)
         setCode(question.starterCode?.[language] ?? starterCode[language])
+        setSelectedTest(0)
+        setSubmitted(false)
+        setGenerationError('')
+        setActiveTab('testcases')
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        setGenerationError(error instanceof Error ? error.message : 'Question generation failed.')
+      })
       .finally(() => setGenerating(false))
   }
 
@@ -119,43 +148,38 @@ function App() {
               {generating ? 'Generating...' : 'Generate New'}
             </button>
           </div>
+          {generationError && <div className="generation-error" role="alert">{generationError}</div>}
 
           <div className="problem-scroll">
             <div className="problem-heading">
               <div>
                 <div className="title-row">
-                  <h1>Find the Smallest Missing Positive</h1>
+                  <h1>{question.title}</h1>
                   {submitted && <span className="solved-chip"><CheckCircle2 size={14} /> Solved</span>}
                 </div>
                 <div className="meta-row">
-                  <span className="difficulty medium">Medium</span>
+                  <span className={`difficulty ${question.difficulty}`}>{question.difficulty}</span>
                   <span className="meta-item"><Sparkles size={14} /> AI Generated</span>
-                  <span className="meta-item"><ThumbsUp size={14} /> 94% match</span>
                 </div>
               </div>
             </div>
 
             <article className="problem-content">
-              <p>Given an unsorted integer array <code>nums</code>, return the smallest positive integer that is missing.</p>
-              <p>You must write an algorithm that runs in <strong>O(n)</strong> time and uses <strong>O(1)</strong> auxiliary space.</p>
+              <p>{question.statement}</p>
 
-              <h2>Example 1</h2>
-              <div className="example-box">
-                <div><span>Input:</span> nums = [1, 3, 6, 4, 1, 2]</div>
-                <div><span>Output:</span> 5</div>
-                <p>Explanation: The smallest missing positive integer is <code>5</code>.</p>
-              </div>
-
-              <h2>Example 2</h2>
-              <div className="example-box">
-                <div><span>Input:</span> nums = [1, 2, 0]</div>
-                <div><span>Output:</span> 3</div>
-              </div>
+              {question.examples.map((example, index) => (
+                <div key={`${example.input}-${index}`}>
+                  <h2>Example {index + 1}</h2>
+                  <div className="example-box">
+                    <div><span>Input:</span> {example.input}</div>
+                    <div><span>Output:</span> {example.output}</div>
+                  </div>
+                </div>
+              ))}
 
               <h2>Constraints</h2>
               <ul>
-                <li><code>{'1 <= nums.length <= 10'}<sup>5</sup></code></li>
-                <li><code>{'-2'}<sup>31</sup>{' <= nums[i] <= 2'}<sup>31</sup>{' - 1'}</code></li>
+                {question.constraints.map((constraint, index) => <li key={`${constraint}-${index}`}><code>{constraint}</code></li>)}
               </ul>
             </article>
           </div>
@@ -213,7 +237,7 @@ function App() {
               {activeTab === 'testcases' ? (
                 <div className="test-layout">
                   <div className="test-list">
-                    {sampleTests.map((test, index) => (
+                    {visibleTests.map((test, index) => (
                       <button
                         key={test.name}
                         className={selectedTest === index ? 'selected' : ''}
@@ -228,11 +252,11 @@ function App() {
                   <div className="test-details">
                     <label>Input</label>
                     <div className="test-value">
-                      <code>nums = {sampleTests[selectedTest].input}</code>
+                      <code>{visibleTests[selectedTest]?.input ?? ''}</code>
                       <button aria-label="Copy input"><Copy size={14} /></button>
                     </div>
                     <label>Expected output</label>
-                    <div className="expected-value">{sampleTests[selectedTest].output}</div>
+                    <div className="expected-value">{visibleTests[selectedTest]?.expectedOutput ?? ''}</div>
                   </div>
                 </div>
               ) : (

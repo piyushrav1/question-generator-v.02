@@ -8,3 +8,4 @@ dist-server/
 coverage/
 .DS_Store
 apps/*/dist/
+apps/api/.env

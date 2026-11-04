@@ -45,6 +45,34 @@ export class QuestionRepository {
     return question
   }
 
+  save(input: {
+    topic: string
+    difficulty: Difficulty
+    generated: {
+      title: string
+      statement: string
+      constraints: string[]
+      examples: Array<{ input: string; output: string }>
+      starterCode: Record<ProgrammingLanguage, string>
+      testCases: TestCaseDto[]
+    }
+  }): QuestionDto {
+    const id = `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const question: QuestionDto = {
+      id,
+      title: input.generated.title,
+      difficulty: input.difficulty,
+      topic: input.topic,
+      statement: input.generated.statement,
+      constraints: input.generated.constraints,
+      examples: input.generated.examples,
+      starterCode: input.generated.starterCode,
+      testCases: input.generated.testCases,
+    }
+    this.questions.set(id, question)
+    return question
+  }
+
   findById(id: string): QuestionDto | undefined {
     return this.questions.get(id)
   }

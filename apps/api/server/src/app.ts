@@ -12,11 +12,15 @@ import { healthRouter } from './routes/healthRoutes.js'
 import { createSubmissionRouter } from './routes/submissionRoutes.js'
 import { QuestionService } from '../../../../services/question-engine/src/questionService.js'
 import { SubmissionService } from '../../../../services/execution-engine/src/submissionService.js'
+import { GeminiQuestionProvider } from '../../../../services/question-engine/src/geminiProvider.js'
 
 export function createApp() {
   const app = express()
   const repository = new QuestionRepository()
-  const questionService = new QuestionService(repository)
+  const questionProvider = env.GEMINI_API_KEY
+    ? new GeminiQuestionProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL)
+    : undefined
+  const questionService = new QuestionService(repository, questionProvider)
   const submissionService = new SubmissionService(repository)
 
   app.disable('x-powered-by')
