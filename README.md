@@ -1,97 +1,113 @@
 # TestMeMan
 
-TestMeMan is an AI-assisted coding practice platform inspired by HackerRank. It provides a focused problem-solving workspace with an online code editor, test-case panel, submission results, and an AI tutor interface.
+TestMeMan is an AI-assisted coding practice platform. This repository contains the React frontend and the TypeScript API foundation for a coding workspace with question generation, test-case management, submissions, hints, and isolated execution integration points.
 
-## Features
+## Repository Status
 
-- HackerRank-style split-screen coding workspace
-- AI-generated problem presentation
-- Support for Python, JavaScript, Java, and C++
-- Monaco-style text editor interface
-- Visible test cases with expected output
-- Run and submit result states
-- Submission status and runtime statistics
-- AI Tutor sidebar
-- Generate-new-question interaction
+The frontend is implemented and runnable. The API currently uses an in-memory development repository and a mock submission evaluator. Real AI generation, database persistence, authentication, and secure code execution are designed as replaceable integration boundaries.
 
-> This repository currently contains the frontend implementation. AI generation, secure code execution, authentication, hidden test cases, and persistent submissions require backend services.
+## Technology
 
-## Tech Stack
-
-- React 19
-- TypeScript
+- React 19 and TypeScript
 - Vite
-- Lucide React icons
+- Express and TypeScript
+- Zod request validation
+- Helmet and structured HTTP logging
+- Shared TypeScript API contracts
+- Lucide React
 
 ## Getting Started
 
-### Prerequisites
+### Requirements
 
 - Node.js 18 or newer
 - npm
 
-### Installation
+### Install
 
 ```powershell
-cd z:\TestMeMan\AI-Interview
 npm.cmd install
+Copy-Item .env.example .env
 ```
 
-### Start the Development Server
+### Run Frontend and API
+
+```powershell
+npm.cmd run dev:all
+```
+
+- Frontend: `http://127.0.0.1:5173`
+- API: `http://127.0.0.1:4000`
+- Health endpoint: `http://127.0.0.1:4000/api/health`
+
+### Run Separately
 
 ```powershell
 npm.cmd run dev
+npm.cmd run server
 ```
 
-Open `http://127.0.0.1:5173/` in your browser.
+## Commands
 
-### Create a Production Build
-
-```powershell
-npm.cmd run build
-```
-
-Build output is generated in the `dist/` directory.
-
-## Available Scripts
-
-| Command | Description |
+| Command | Purpose |
 |---|---|
-| `npm.cmd run dev` | Start the Vite development server |
-| `npm.cmd run build` | Type-check and create a production build |
-| `npm.cmd run preview` | Preview the production build locally |
-| `npm.cmd run server` | Start the backend API with file watching |
-| `npm.cmd run dev:all` | Start the frontend and backend together |
+| `npm.cmd run dev` | Start the frontend development server |
+| `npm.cmd run server` | Start the API with file watching |
+| `npm.cmd run dev:all` | Start frontend and API together |
+| `npm.cmd run typecheck` | Type-check frontend and backend |
+| `npm.cmd run build` | Create the frontend production build |
+| `npm.cmd run check` | Run type checks and the production build |
 
-## Project Structure
+## Project Layout
 
 ```text
-AI-Interview/
-├── src/
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── styles.css
-├── index.html
-├── package.json
-├── tsconfig.json
-├── tsconfig.app.json
-└── AI-Coding-Practice-Platform-Plan.md
+src/
+  main.tsx             React entry point
+  App.tsx              Coding workspace composition
+  services/            Frontend API integration
+  styles.css           Application styles
+
+shared/
+  types.ts             Shared API request and response contracts
+
+server/src/
+  app.ts               Express composition
+  index.ts             Process entry point
+  config/              Environment and logger configuration
+  routes/              HTTP route definitions
+  middleware/          Validation and error handling
+  services/            Business logic
+  repositories/        Data-access implementations
+
+docs/
+  See ARCHITECTURE.md and API.md
 ```
 
-## Planned Backend
+Additional files:
 
-The frontend is designed to connect with the following services:
+- [Architecture](ARCHITECTURE.md)
+- [API reference](API.md)
+- [Contributing guide](CONTRIBUTING.md)
+- [Platform roadmap](AI-Coding-Practice-Platform-Plan.md)
 
-- AI question-generation API
-- Structured reference solution validation
-- Visible and hidden test-case generation
-- Isolated container-based code execution
-- Submission queue and result processing
-- Authentication and submission history
-- AI hints and post-submission explanations
+## Configuration
 
-The complete architecture and implementation roadmap are documented in [AI-Coding-Practice-Platform-Plan.md](AI-Coding-Practice-Platform-Plan.md).
+Copy `.env.example` to `.env` and change values for your environment.
+
+Frontend variables are declared by the application through Vite. API variables are read by the server configuration module.
+
+## Integration Notes
+
+- Replace `QuestionRepository` with a database repository without changing route contracts.
+- Implement an AI provider adapter in the question service.
+- Implement submission evaluation through a queue and isolated execution workers.
+- Store authentication context in Express middleware after integrating with the existing identity platform.
+- Keep hidden test-case output out of public question responses.
+
+## Production Safety
+
+Do not run submitted user code inside the Express API process. Production submissions require isolated containers or a dedicated execution service with CPU, memory, time, network, filesystem, and process controls.
 
 ## License
 
-No license has been added yet. All rights are reserved unless a license is explicitly added.
+No license has been added. Add an approved license before distributing or open-sourcing the project.

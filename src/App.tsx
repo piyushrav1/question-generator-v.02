@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import {
-  Bell, BookOpen, ChevronDown, Clock3, Code2, Copy, Play, RefreshCw,
-  Sparkles, Send, Settings, Terminal, ThumbsUp, User, CheckCircle2,
+  Bell, ChevronDown, Code2, Copy, Play, RefreshCw,
+  Sparkles, Send, Settings, Terminal, ThumbsUp, CheckCircle2,
 } from 'lucide-react'
+import { apiClient } from './services'
+import type { ProgrammingLanguage } from './types'
 
 const starterCode: Record<string, string> = {
   Python: `def smallest_missing_positive(nums):
@@ -31,7 +33,7 @@ const sampleTests = [
 ]
 
 function App() {
-  const [language, setLanguage] = useState('Python')
+  const [language, setLanguage] = useState<ProgrammingLanguage>('Python')
   const [code, setCode] = useState(starterCode.Python)
   const [activeTab, setActiveTab] = useState<'testcases' | 'result'>('testcases')
   const [selectedTest, setSelectedTest] = useState(0)
@@ -40,7 +42,7 @@ function App() {
   const [generating, setGenerating] = useState(false)
   const [aiOpen, setAiOpen] = useState(true)
 
-  const changeLanguage = (value: string) => {
+  const changeLanguage = (value: ProgrammingLanguage) => {
     setLanguage(value)
     setCode(starterCode[value])
   }
@@ -48,15 +50,11 @@ function App() {
   const runCode = () => {
     setRunning(true)
     setActiveTab('result')
-    fetch('/api/submissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        questionId: 'demo-question',
-        language,
-        code,
-        submitted: false,
-      }),
+    apiClient.submit({
+      questionId: 'demo-question',
+      language,
+      code,
+      submitted: false,
     })
       .catch(() => undefined)
       .finally(() => {
@@ -68,17 +66,12 @@ function App() {
   const submitCode = () => {
     setRunning(true)
     setActiveTab('result')
-    fetch('/api/submissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        questionId: 'demo-question',
-        language,
-        code,
-        submitted: true,
-      }),
+    apiClient.submit({
+      questionId: 'demo-question',
+      language,
+      code,
+      submitted: true,
     })
-      .then((response) => response.json())
       .then((result) => setSubmitted(result.status === 'accepted'))
       .catch(() => setSubmitted(false))
       .finally(() => setRunning(false))
@@ -86,15 +79,7 @@ function App() {
 
   const generateQuestion = () => {
     setGenerating(true)
-    fetch('/api/questions/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic: 'arrays', difficulty: 'medium' }),
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error('Unable to generate a question')
-        return response.json()
-      })
+    apiClient.generateQuestion({ topic: 'arrays', difficulty: 'medium' })
       .then((question) => {
         setCode(question.starterCode?.[language] ?? starterCode[language])
       })
@@ -185,7 +170,7 @@ function App() {
             <div className="editor-actions">
               <button className="language-button">
                 {language} <ChevronDown size={14} />
-                <select value={language} onChange={(event) => changeLanguage(event.target.value)} aria-label="Select language">
+                <select value={language} onChange={(event) => changeLanguage(event.target.value as ProgrammingLanguage)} aria-label="Select language">
                   <option>Python</option>
                   <option>JavaScript</option>
                   <option>Java</option>

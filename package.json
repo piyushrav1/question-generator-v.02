@@ -6,26 +6,32 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "typecheck": "tsc -b && tsc -p tsconfig.server.json",
     "preview": "vite preview",
     "server": "tsx watch server/src/index.ts",
     "server:start": "tsx server/src/index.ts",
-    "dev:all": "concurrently -k \"npm run server\" \"npm run dev\""
+    "dev:all": "concurrently -k \"npm run server\" \"npm run dev\"",
+    "check": "npm run typecheck && npm run build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.5",
-    "typescript": "~5.7.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "lucide-react": "^0.468.0",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.468.0",
-    "express": "^4.21.2",
-    "cors": "^2.8.5"
+    "typescript": "~5.7.2",
+    "vite": "^6.0.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "@types/express": "^5.0.0",
-    "@types/cors": "^2.8.17",
     "concurrently": "^9.1.2",
     "tsx": "^4.19.2"
   }

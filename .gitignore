@@ -5,3 +5,5 @@ dist/
 *.log
 *.tsbuildinfo
 dist-server/
+coverage/
+.DS_Store
