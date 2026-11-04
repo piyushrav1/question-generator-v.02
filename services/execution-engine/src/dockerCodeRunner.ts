@@ -13,7 +13,7 @@ export class DockerCodeRunner implements CodeRunner {
       const files = await this.writeSource(workDir, request.language, request.code)
       const dockerArgs = this.buildDockerArgs(workDir, files, request)
       const startedAt = Date.now()
-      const result = await this.runDocker(dockerArgs, request.input, request.timeoutMs)
+      const result = await this.runDocker(dockerArgs, request.input, request.timeoutMs, workDir, request)
 
       return {
         ...result,
@@ -64,7 +64,13 @@ export class DockerCodeRunner implements CodeRunner {
     return [...common, 'gcc:14.2.0', 'sh', '-c', 'g++ -std=c++17 -O2 -o /tmp/main /work/main.cpp && /tmp/main']
   }
 
-  private runDocker(args: string[], stdin: string, timeoutMs: number): Promise<Omit<ExecutionResult, 'runtimeMs'>> {
+  private runDocker(
+    args: string[],
+    stdin: string,
+    timeoutMs: number,
+    workDir: string,
+    request: ExecutionRequest,
+  ): Promise<Omit<ExecutionResult, 'runtimeMs'>> {
     return new Promise((resolve) => {
       const child = spawn('docker', args, {
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -88,6 +94,10 @@ export class DockerCodeRunner implements CodeRunner {
         if (settled) return
         settled = true
         clearTimeout(timer)
+        if (error.message.includes('ENOENT')) {
+          this.runNative(workDir, request, stdin, timeoutMs).then(resolve)
+          return
+        }
         resolve({
           stdout: '',
           stderr: error.message.includes('ENOENT')
@@ -98,6 +108,121 @@ export class DockerCodeRunner implements CodeRunner {
         })
       })
 
+      child.on('close', (exitCode) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve({
+          stdout,
+          stderr,
+          timedOut,
+          runtimeError: !timedOut && exitCode !== 0,
+        })
+      })
+    })
+  }
+
+  private runNative(
+    workDir: string,
+    request: ExecutionRequest,
+    stdin: string,
+    timeoutMs: number,
+  ): Promise<Omit<ExecutionResult, 'runtimeMs'>> {
+    const executable = request.language === 'Python'
+      ? { command: 'python', args: [join(workDir, 'main.py')] }
+      : request.language === 'JavaScript'
+        ? { command: 'node', args: [join(workDir, 'main.js')] }
+        : request.language === 'C++'
+          ? { command: join(workDir, 'main.exe'), args: [] }
+          : { command: '', args: [] }
+
+    return new Promise((resolve) => {
+      let compilation: ReturnType<typeof spawn> | null = null
+      if (request.language === 'C++') {
+        compilation = spawn('g++', ['-std=c++17', '-O2', '-o', join(workDir, 'main.exe'), join(workDir, 'main.cpp')], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        })
+        let compileError = ''
+        compilation.stderr?.on('data', (chunk) => { compileError += chunk.toString() })
+        compilation.on('error', (error) => resolve({
+          stdout: '',
+          stderr: error.message,
+          timedOut: false,
+          runtimeError: true,
+        }))
+        compilation.on('close', (exitCode) => {
+          if (exitCode !== 0) {
+            resolve({
+              stdout: '',
+              stderr: compileError || 'C++ compilation failed.',
+              timedOut: false,
+              runtimeError: true,
+            })
+            return
+          }
+          this.runNativeProcess(executable.command, executable.args, stdin, timeoutMs).then(resolve)
+        })
+        return
+      }
+
+      if (!executable.command) {
+        resolve({
+          stdout: '',
+          stderr: 'Java execution requires Docker or a locally configured Java runtime.',
+          timedOut: false,
+          runtimeError: true,
+        })
+        return
+      }
+      this.runNativeProcess(executable.command, executable.args, stdin, timeoutMs).then(resolve)
+    })
+  }
+
+  private runNativeProcess(
+    command: string,
+    args: string[],
+    stdin: string,
+    timeoutMs: number,
+  ): Promise<Omit<ExecutionResult, 'runtimeMs'>> {
+    return new Promise((resolve) => {
+      let child: ReturnType<typeof spawn>
+      try {
+        child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+      } catch (error) {
+        resolve({
+          stdout: '',
+          stderr: error instanceof Error ? error.message : 'Native runtime is unavailable.',
+          timedOut: false,
+          runtimeError: true,
+        })
+        return
+      }
+
+      let stdout = ''
+      let stderr = ''
+      let timedOut = false
+      let settled = false
+      child.stdout?.on('data', (chunk) => { stdout += chunk.toString() })
+      child.stderr?.on('data', (chunk) => { stderr += chunk.toString() })
+      child.stdin?.end(stdin)
+
+      const timer = setTimeout(() => {
+        timedOut = true
+        child.kill('SIGKILL')
+      }, timeoutMs)
+
+      child.on('error', (error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve({
+          stdout: '',
+          stderr: `${error.message} Native runtime is unavailable.`,
+          timedOut: false,
+          runtimeError: true,
+        })
+      })
       child.on('close', (exitCode) => {
         if (settled) return
         settled = true

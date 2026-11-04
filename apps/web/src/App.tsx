@@ -73,16 +73,38 @@ function App() {
 
   const runCode = () => {
     setRunning(true)
+    setHasSubmitted(true)
+    setActiveTab('result')
     apiClient.submit({
       questionId: question.id,
       language,
       code,
       submitted: false,
     })
-      .catch(() => undefined)
+      .then((result) => {
+        setSubmitted(false)
+        setSubmissionResult(result)
+        setActiveTab('result')
+      })
+      .catch((error) => {
+        setSubmissionResult({
+          id: `sub-${Date.now().toString(36)}`,
+          questionId: question.id,
+          language,
+          status: 'runtime_error',
+          submitted: false,
+          totalCases: visibleTests.length,
+          visiblePassed: 0,
+          visibleTotal: visibleTests.length,
+          hiddenPassed: 0,
+          hiddenTotal: 0,
+          runtimeMs: null,
+          memoryMb: null,
+          message: error instanceof Error ? error.message : 'Unable to run the solution.',
+        })
+      })
       .finally(() => {
         setRunning(false)
-        setSubmitted(false)
       })
   }
 
@@ -102,7 +124,21 @@ function App() {
       })
       .catch(() => {
         setSubmitted(false)
-        setSubmissionResult(null)
+        setSubmissionResult({
+          id: `sub-${Date.now().toString(36)}`,
+          questionId: question.id,
+          language,
+          status: 'runtime_error',
+          submitted: true,
+          totalCases: visibleTests.length,
+          visiblePassed: 0,
+          visibleTotal: visibleTests.length,
+          hiddenPassed: 0,
+          hiddenTotal: 0,
+          runtimeMs: null,
+          memoryMb: null,
+          message: 'Unable to submit the solution. Check that the API server is running.',
+        })
         setHasSubmitted(true)
         setActiveTab('result')
       })
@@ -280,7 +316,7 @@ function App() {
                 <div className="result-view">
                   {running ? (
                     <div className="running-state"><RefreshCw size={18} className="spin" /> Running test cases...</div>
-                  ) : submitted ? (
+                  ) : (submitted || submissionResult?.status === 'accepted') ? (
                     <>
                       <div className="result-summary success">
                         <CheckCircle2 size={20} />

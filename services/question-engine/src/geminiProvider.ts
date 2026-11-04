@@ -29,6 +29,9 @@ Requirements:
 - Do not include explanations, Markdown, comments outside JSON, or code fences.
 - Every expectedOutput must be correct for the input.
 - Starter code must compile conceptually in each listed language.
+- For Python, use a LeetCode-style class named Solution and provide each generated method with explicit parameter names that match the problem.
+- For test cases, use named assignments such as "nums = [1, 2, 3], k = 100" whenever a problem has multiple inputs.
+- Keep test-case inputs deterministic and parseable as arrays, strings, and numbers.
 `
 
 export class GeminiQuestionProvider implements QuestionProvider {

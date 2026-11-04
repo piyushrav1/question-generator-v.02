@@ -1,4 +1,4 @@
-import type { SubmissionRequest, SubmissionResultDto } from '../../../packages/shared/src/types.js'
+import type { ProgrammingLanguage, SubmissionRequest, SubmissionResultDto } from '../../../packages/shared/src/types.js'
 import { QuestionRepository } from '../../question-engine/src/questionRepository.js'
 import { HttpError } from '../../../packages/shared/src/errors/httpError.js'
 import { DockerCodeRunner } from './dockerCodeRunner.js'
@@ -18,7 +18,7 @@ export class SubmissionService {
     }
 
     const visibleCases = question.testCases.filter((testCase) => !testCase.hidden)
-    const hiddenCases = question.testCases.filter((testCase) => testCase.hidden)
+    const hiddenCases = input.submitted ? question.testCases.filter((testCase) => testCase.hidden) : []
     const visiblePassed = await this.countPassed(visibleCases, input)
     const hiddenPassed = await this.countPassed(hiddenCases, input)
     const runtimeError = visiblePassed.error || hiddenPassed.error
@@ -53,28 +53,113 @@ export class SubmissionService {
         : status === 'time_limit_exceeded'
           ? 'Execution exceeded the allowed time limit.'
           : status === 'runtime_error'
-            ? 'Your submission could not be executed. Check the language and syntax.'
+            ? (visiblePassed.stderr || hiddenPassed.stderr || 'Your submission could not be executed. Check the language and syntax.')
             : 'One or more test cases failed.',
     }
+  }
+
+  private prepareCode(language: ProgrammingLanguage, code: string): string {
+    if (language !== 'Python' || !/\bclass\s+Solution\b/.test(code)) {
+      return code
+    }
+
+    return `${code}
+
+if __name__ == "__main__":
+    import ast
+    import inspect
+    import json
+    import re
+    import sys
+
+    raw = sys.stdin.read().strip()
+    values = {}
+
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            values.update(parsed)
+        elif isinstance(parsed, list):
+            values["args"] = [parsed]
+    except Exception:
+        pass
+
+    for name, value_text in re.findall(
+        r"([A-Za-z_]\\w*)\\s*=\\s*(\\[[^\\]]*\\]|-?\\d+(?:\\.\\d+)?)",
+        raw,
+        re.S,
+    ):
+        try:
+            values[name] = ast.literal_eval(value_text)
+        except Exception:
+            values[name] = value_text
+
+    if not values:
+        parts = [part.strip() for part in raw.splitlines() if part.strip()]
+        positional = []
+        for part in parts:
+            try:
+                positional.append(ast.literal_eval(part))
+            except Exception:
+                positional.append(part)
+        values["args"] = positional
+
+    solution = Solution()
+    methods = [
+        getattr(solution, name)
+        for name, member in inspect.getmembers(solution, predicate=inspect.ismethod)
+        if not name.startswith("_")
+    ]
+    method = methods[0] if methods else None
+
+    if method is None:
+        print("")
+    else:
+        parameters = [
+            parameter
+            for parameter in inspect.signature(method).parameters.values()
+            if parameter.name != "self"
+        ]
+        arguments = []
+        fallback = values.get("args", [])
+
+        for index, parameter in enumerate(parameters):
+            if parameter.name in values:
+                arguments.append(values[parameter.name])
+            elif index < len(fallback):
+                arguments.append(fallback[index])
+            elif parameter.default is not inspect.Parameter.empty:
+                arguments.append(parameter.default)
+            else:
+                arguments.append(None)
+
+        result = method(*arguments)
+        if isinstance(result, (dict, list, tuple)):
+            print(json.dumps(result))
+        else:
+            print(result)
+`
   }
 
   private async countPassed(
     testCases: Array<{ input: string; expectedOutput?: string }>,
     input: SubmissionRequest,
-  ): Promise<{ count: number; error: boolean; timedOut: boolean; runtimeMs: number[] }> {
+  ): Promise<{ count: number; error: boolean; timedOut: boolean; runtimeMs: number[]; stderr: string }> {
     let count = 0
     let error = false
     let timedOut = false
+    let stderr = ''
     const runtimeMs: number[] = []
 
     for (const testCase of testCases) {
       const result = await this.runner.execute({
         language: input.language,
-        code: input.code,
+        code: this.prepareCode(input.language, input.code),
         input: testCase.input,
         timeoutMs: this.timeoutMs,
       })
       runtimeMs.push(result.runtimeMs)
+      if (result.stderr) stderr = result.stderr
       if (result.timedOut) timedOut = true
       if (result.runtimeError) error = true
       if (!result.timedOut && !result.runtimeError && result.stdout.trim() === testCase.expectedOutput?.trim()) {
@@ -83,6 +168,6 @@ export class SubmissionService {
       if (timedOut || error) break
     }
 
-    return { count, error, timedOut, runtimeMs }
+    return { count, error, timedOut, runtimeMs, stderr }
   }
 }
