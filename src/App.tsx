@@ -73,7 +73,7 @@ function App() {
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark"><Code2 size={20} strokeWidth={2.5} /></div>
-          <span>CodePilot</span>
+          <span>TestMeMan</span>
         </div>
         <nav className="main-nav">
           <a href="#">Practice</a>

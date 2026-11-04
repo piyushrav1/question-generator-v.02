@@ -1,6 +1,6 @@
-# CodePilot
+# TestMeMan
 
-CodePilot is an AI-assisted coding practice platform inspired by HackerRank. It provides a focused problem-solving workspace with an online code editor, test-case panel, submission results, and an AI tutor interface.
+TestMeMan is an AI-assisted coding practice platform inspired by HackerRank. It provides a focused problem-solving workspace with an online code editor, test-case panel, submission results, and an AI tutor interface.
 
 ## Features
 
