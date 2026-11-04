@@ -34,6 +34,17 @@ export interface SubmissionRequest {
   language: ProgrammingLanguage
   code: string
   submitted: boolean
+  customInput?: string
+}
+
+export interface SubmissionCaseResultDto {
+  id: string
+  name: string
+  hidden: boolean
+  status: 'passed' | 'wrong_answer' | 'runtime_error' | 'time_limit_exceeded'
+  actualOutput?: string
+  expectedOutput?: string
+  runtimeMs: number
 }
 
 export interface SubmissionResultDto {
@@ -50,4 +61,5 @@ export interface SubmissionResultDto {
   runtimeMs: number | null
   memoryMb: number | null
   message: string
+  caseResults?: SubmissionCaseResultDto[]
 }

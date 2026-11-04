@@ -56,6 +56,7 @@ function App() {
     })),
   })
   const [activeTab, setActiveTab] = useState<'testcases' | 'result'>('testcases')
+  const [editorTab, setEditorTab] = useState<'solution' | 'submissions'>('solution')
   const [selectedTest, setSelectedTest] = useState(0)
   const [running, setRunning] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -64,6 +65,10 @@ function App() {
   const [generating, setGenerating] = useState(false)
   const [generationError, setGenerationError] = useState('')
   const [aiOpen, setAiOpen] = useState(true)
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionResultDto[]>([])
+  const [customInput, setCustomInput] = useState('')
+  const [customOutput, setCustomOutput] = useState('')
+  const [customMode, setCustomMode] = useState(false)
   const visibleTests = question.testCases.filter((test) => !test.hidden)
 
   const changeLanguage = (value: ProgrammingLanguage) => {
@@ -84,6 +89,7 @@ function App() {
       .then((result) => {
         setSubmitted(false)
         setSubmissionResult(result)
+        setSubmissionHistory((history) => [result, ...history].slice(0, 20))
         setActiveTab('result')
       })
       .catch((error) => {
@@ -119,6 +125,7 @@ function App() {
       .then((result) => {
         setSubmitted(result.status === 'accepted')
         setSubmissionResult(result)
+        setSubmissionHistory((history) => [result, ...history].slice(0, 20))
         setHasSubmitted(true)
         setActiveTab('result')
       })
@@ -145,6 +152,45 @@ function App() {
       .finally(() => setRunning(false))
   }
 
+  const runCustomTest = () => {
+    setRunning(true)
+    setHasSubmitted(true)
+    setActiveTab('result')
+    apiClient.submit({
+      questionId: question.id,
+      language,
+      code,
+      submitted: false,
+      customInput,
+    })
+      .then((result) => {
+        setSubmitted(false)
+        setSubmissionResult(result)
+        setCustomOutput(result.caseResults?.[0]?.actualOutput ?? '')
+        setSubmissionHistory((history) => [result, ...history].slice(0, 20))
+      })
+      .catch((error) => {
+        const result: SubmissionResultDto = {
+          id: `sub-${Date.now().toString(36)}`,
+          questionId: question.id,
+          language,
+          status: 'runtime_error',
+          submitted: false,
+          totalCases: 1,
+          visiblePassed: 0,
+          visibleTotal: 1,
+          hiddenPassed: 0,
+          hiddenTotal: 0,
+          runtimeMs: null,
+          memoryMb: null,
+          message: error instanceof Error ? error.message : 'Unable to run the custom test.',
+        }
+        setSubmissionResult(result)
+        setCustomOutput('')
+      })
+      .finally(() => setRunning(false))
+  }
+
   const generateQuestion = () => {
     setGenerating(true)
     apiClient.generateQuestion({ topic: 'arrays', difficulty: 'medium' })
@@ -157,6 +203,9 @@ function App() {
         setHasSubmitted(false)
         setGenerationError('')
         setActiveTab('testcases')
+        setCustomMode(false)
+        setCustomInput('')
+        setCustomOutput('')
       })
       .catch((error) => {
         setGenerationError(error instanceof Error ? error.message : 'Question generation failed.')
@@ -236,8 +285,8 @@ function App() {
         <section className="editor-pane">
           <div className="editor-toolbar">
             <div className="tabs">
-              <button className="tab active">Solution</button>
-              <button className="tab">Submissions</button>
+              <button className={`tab ${editorTab === 'solution' ? 'active' : ''}`} onClick={() => setEditorTab('solution')}>Solution</button>
+              <button className={`tab ${editorTab === 'submissions' ? 'active' : ''}`} onClick={() => setEditorTab('submissions')}>Submissions</button>
             </div>
             <div className="editor-actions">
               <button className="language-button">
@@ -253,6 +302,34 @@ function App() {
             </div>
           </div>
 
+          {editorTab === 'submissions' ? (
+            <div className="submission-history">
+              <div className="history-heading">
+                <span>Status</span><span>Language</span><span>Cases</span><span>Runtime</span>
+              </div>
+              {submissionHistory.length === 0 ? (
+                <div className="history-empty">No submissions yet.</div>
+              ) : submissionHistory.map((item) => (
+                <button
+                  key={item.id}
+                  className="history-row"
+                  onClick={() => {
+                    setSubmissionResult(item)
+                    setHasSubmitted(true)
+                    setSubmitted(item.status === 'accepted')
+                    setActiveTab('result')
+                    setEditorTab('solution')
+                  }}
+                >
+                  <span className={`history-status ${item.status}`}>{item.status.replace(/_/g, ' ')}</span>
+                  <span>{item.language}</span>
+                  <span>{item.visiblePassed}/{item.visibleTotal}</span>
+                  <span>{item.runtimeMs ? `${item.runtimeMs} ms` : 'N/A'}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+          <>
           <div className="code-area">
             <div className="line-numbers" aria-hidden="true">
               {code.split('\n').map((_, index) => <div key={index}>{index + 1}</div>)}
@@ -288,6 +365,25 @@ function App() {
                 </div>
                 <div className="output-content">
               {activeTab === 'testcases' ? (
+                customMode ? (
+                  <div className="custom-layout">
+                    <div>
+                      <label>Custom input</label>
+                      <textarea
+                        value={customInput}
+                        onChange={(event) => setCustomInput(event.target.value)}
+                        placeholder="Enter custom test input"
+                      />
+                      <button className="custom-run-button" onClick={runCustomTest} disabled={running || !customInput.trim()}>
+                        <Play size={14} /> Run custom test
+                      </button>
+                    </div>
+                    <div>
+                      <label>Output</label>
+                      <pre>{running ? 'Running...' : customOutput || 'No output yet'}</pre>
+                    </div>
+                  </div>
+                ) : (
                 <div className="test-layout">
                   <div className="test-list">
                     {visibleTests.map((test, index) => (
@@ -312,6 +408,7 @@ function App() {
                     <div className="expected-value">{visibleTests[selectedTest]?.expectedOutput ?? ''}</div>
                   </div>
                 </div>
+                )
               ) : (
                 <div className="result-view">
                   {running ? (
@@ -341,6 +438,20 @@ function App() {
                       </div>
                     </>
                   )}
+                      {!running && submissionResult?.caseResults && submissionResult.caseResults.length > 0 && (
+                        <div className="case-results">
+                          {submissionResult.caseResults.map((test, index) => (
+                            <div className="case-result-row" key={`${test.id}-${index}`}>
+                              <span className={`case-status ${test.status}`}>
+                                {test.status === 'passed' ? <CheckCircle2 size={14} /> : <Terminal size={14} />}
+                                {test.name}
+                              </span>
+                              {test.actualOutput !== undefined && <code>{test.actualOutput || '(empty output)'}</code>}
+                              <span>{test.runtimeMs} ms</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                 </div>
               )}
                 </div>
@@ -349,7 +460,16 @@ function App() {
           </div>
 
           <footer className="editor-footer">
-            <button className="custom-test-button"><Terminal size={16} /> Custom test cases</button>
+            <button
+              className="custom-test-button"
+              onClick={() => {
+                setCustomMode(true)
+                setHasSubmitted(true)
+                setActiveTab('testcases')
+              }}
+            >
+              <Terminal size={16} /> Custom test cases
+            </button>
             <div className="submit-actions">
               <button className="run-button" onClick={runCode} disabled={running}>
                 <Play size={16} fill="currentColor" /> Run
@@ -360,6 +480,8 @@ function App() {
               </button>
             </div>
           </footer>
+          </>
+          )}
         </section>
 
         {aiOpen && (

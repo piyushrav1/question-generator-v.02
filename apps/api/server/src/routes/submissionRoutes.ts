@@ -9,6 +9,7 @@ const submissionSchema = z.object({
   language: z.enum(PROGRAMMING_LANGUAGES),
   code: z.string().min(20).max(100_000),
   submitted: z.boolean().default(false),
+  customInput: z.string().max(10_000).optional(),
 })
 
 export function createSubmissionRouter(service: SubmissionService): Router {

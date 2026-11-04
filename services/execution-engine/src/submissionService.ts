@@ -1,4 +1,4 @@
-import type { ProgrammingLanguage, SubmissionRequest, SubmissionResultDto } from '../../../packages/shared/src/types.js'
+import type { ProgrammingLanguage, SubmissionCaseResultDto, SubmissionRequest, SubmissionResultDto } from '../../../packages/shared/src/types.js'
 import { QuestionRepository } from '../../question-engine/src/questionRepository.js'
 import { HttpError } from '../../../packages/shared/src/errors/httpError.js'
 import { DockerCodeRunner } from './dockerCodeRunner.js'
@@ -15,6 +15,49 @@ export class SubmissionService {
     const question = await this.repository.findById(input.questionId)
     if (!question) {
       throw new HttpError(404, 'Question not found.', 'QUESTION_NOT_FOUND')
+    }
+
+    if (typeof input.customInput === 'string') {
+      const result = await this.runner.execute({
+        language: input.language,
+        code: this.prepareCode(input.language, input.code),
+        input: input.customInput,
+        timeoutMs: this.timeoutMs,
+      })
+      const status = result.timedOut
+        ? 'time_limit_exceeded'
+        : result.runtimeError
+          ? 'runtime_error'
+          : 'accepted'
+      const customResult: SubmissionResultDto = {
+        id: `sub-${Date.now().toString(36)}`,
+        questionId: input.questionId,
+        language: input.language,
+        status,
+        submitted: false,
+        totalCases: 1,
+        visiblePassed: 0,
+        visibleTotal: 1,
+        hiddenPassed: 0,
+        hiddenTotal: 0,
+        runtimeMs: result.runtimeMs,
+        memoryMb: null,
+        message: status === 'time_limit_exceeded'
+          ? 'Custom test execution exceeded the allowed time limit.'
+          : status === 'runtime_error'
+            ? result.stderr || 'Custom test could not be executed.'
+            : 'Custom test completed.',
+        caseResults: [{
+          id: 'custom',
+          name: 'Custom Test',
+          hidden: false,
+          status: status === 'accepted' ? 'passed' : status,
+          actualOutput: result.stdout.trim(),
+          runtimeMs: result.runtimeMs,
+        }],
+      }
+      await this.repository.saveSubmission(customResult)
+      return customResult
     }
 
     const visibleCases = question.testCases.filter((testCase) => !testCase.hidden)
@@ -48,6 +91,7 @@ export class SubmissionService {
       hiddenTotal: hiddenCases.length,
       runtimeMs: runtimeValues.length ? Math.round(runtimeValues.reduce((sum, value) => sum + value, 0) / runtimeValues.length) : null,
       memoryMb: null,
+      caseResults: visiblePassed.caseResults,
       message: status === 'accepted'
         ? 'All visible and hidden test cases passed.'
         : status === 'time_limit_exceeded'
@@ -145,14 +189,15 @@ if __name__ == "__main__":
   }
 
   private async countPassed(
-    testCases: Array<{ input: string; expectedOutput?: string }>,
+    testCases: Array<{ id: string; name: string; input: string; expectedOutput?: string; hidden: boolean }>,
     input: SubmissionRequest,
-  ): Promise<{ count: number; error: boolean; timedOut: boolean; runtimeMs: number[]; stderr: string }> {
+  ): Promise<{ count: number; error: boolean; timedOut: boolean; runtimeMs: number[]; stderr: string; caseResults: SubmissionCaseResultDto[] }> {
     let count = 0
     let error = false
     let timedOut = false
     let stderr = ''
     const runtimeMs: number[] = []
+    const caseResults: SubmissionCaseResultDto[] = []
 
     for (const testCase of testCases) {
       const result = await this.runner.execute({
@@ -165,12 +210,28 @@ if __name__ == "__main__":
       if (result.stderr) stderr = result.stderr
       if (result.timedOut) timedOut = true
       if (result.runtimeError) error = true
-      if (!result.timedOut && !result.runtimeError && result.stdout.trim() === testCase.expectedOutput?.trim()) {
+      const passed = !result.timedOut && !result.runtimeError && result.stdout.trim() === testCase.expectedOutput?.trim()
+      if (passed) {
         count += 1
       }
+      caseResults.push({
+        id: testCase.id,
+        name: testCase.hidden ? 'Hidden Test Case' : testCase.name,
+        hidden: testCase.hidden,
+        status: result.timedOut
+          ? 'time_limit_exceeded'
+          : result.runtimeError
+            ? 'runtime_error'
+            : passed
+              ? 'passed'
+              : 'wrong_answer',
+        actualOutput: testCase.hidden ? undefined : result.stdout.trim(),
+        expectedOutput: testCase.hidden ? undefined : testCase.expectedOutput,
+        runtimeMs: result.runtimeMs,
+      })
       if (timedOut || error) break
     }
 
-    return { count, error, timedOut, runtimeMs, stderr }
+    return { count, error, timedOut, runtimeMs, stderr, caseResults }
   }
 }
