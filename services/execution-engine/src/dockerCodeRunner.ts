@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -113,6 +113,11 @@ export class DockerCodeRunner implements CodeRunner {
         if (settled) return
         settled = true
         clearTimeout(timer)
+        const dockerError = this.isDockerUnavailableError(stderr)
+        if (dockerError) {
+          this.runNative(workDir, request, stdin, timeoutMs).then(resolve)
+          return
+        }
         resolve({
           stdout,
           stderr,
@@ -131,27 +136,43 @@ export class DockerCodeRunner implements CodeRunner {
   ): Promise<Omit<ExecutionResult, 'runtimeMs'>> {
     const javaHomeCandidates = [
       process.env.JAVA_HOME,
-      join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Eclipse Adoptium', 'jdk-21.0.13.9-hotspot'),
-      join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Eclipse Adoptium', 'jdk-21.0.9.9-hotspot'),
+      process.env.JDK_HOME,
+      ...this.findJdkHomes(),
     ].filter((value): value is string => Boolean(value))
     const javaHome = javaHomeCandidates.find((candidate) =>
       existsSync(join(candidate, 'bin', 'javac.exe')) || existsSync(join(candidate, 'bin', 'javac')))
     const javacCommand = javaHome ? join(javaHome, 'bin', process.platform === 'win32' ? 'javac.exe' : 'javac') : 'javac'
     const javaCommand = javaHome ? join(javaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : 'java'
-    const executable = request.language === 'Python'
-      ? { command: 'python', args: [join(workDir, 'main.py')] }
-      : request.language === 'JavaScript'
-        ? { command: 'node', args: [join(workDir, 'main.js')] }
-        : request.language === 'C++'
-          ? { command: join(workDir, 'main.exe'), args: [] }
-          : request.language === 'Java'
-            ? { command: javaCommand, args: ['-cp', workDir, 'Main'] }
-            : { command: '', args: [] }
+
+    if (request.language === 'Python') {
+      const candidates = [
+        { command: 'python', args: [join(workDir, 'main.py')] },
+        { command: 'python3', args: [join(workDir, 'main.py')] },
+        { command: 'py', args: ['-3', join(workDir, 'main.py')] },
+      ]
+      return this.runNativeCandidates(candidates, stdin, timeoutMs)
+    }
+    if (request.language === 'JavaScript') {
+      const candidates = [
+        { command: 'node', args: [join(workDir, 'main.js')] },
+        { command: 'nodejs', args: [join(workDir, 'main.js')] },
+      ]
+      return this.runNativeCandidates(candidates, stdin, timeoutMs)
+    }
+
+    const executable = request.language === 'C++'
+      ? { command: join(workDir, process.platform === 'win32' ? 'main.exe' : 'main'), args: [] }
+      : { command: javaCommand, args: ['-cp', workDir, 'Main'] }
 
     return new Promise((resolve) => {
       let compilation: ReturnType<typeof spawn> | null = null
       if (request.language === 'C++') {
-        compilation = spawn('g++', ['-std=c++17', '-O2', '-o', join(workDir, 'main.exe'), join(workDir, 'main.cpp')], {
+        const compilerCandidates = ['g++', 'clang++', 'c++']
+        const compiler = compilerCandidates.find((candidate) => {
+          if (process.platform !== 'win32') return true
+          return existsSync(candidate) || candidate === 'g++'
+        }) ?? 'g++'
+        compilation = spawn(compiler, ['-std=c++17', '-O2', '-o', join(workDir, process.platform === 'win32' ? 'main.exe' : 'main'), join(workDir, 'main.cpp')], {
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
         })
@@ -218,6 +239,63 @@ export class DockerCodeRunner implements CodeRunner {
       }
       this.runNativeProcess(executable.command, executable.args, stdin, timeoutMs).then(resolve)
     })
+  }
+
+  private findJdkHomes(): string[] {
+    const roots = [
+      join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Eclipse Adoptium'),
+      join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Java'),
+      join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Microsoft'),
+      join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Java'),
+      join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Eclipse Adoptium'),
+    ].filter(Boolean)
+    const homes: string[] = []
+
+    for (const root of roots) {
+      if (!existsSync(root)) continue
+      try {
+        for (const entry of readdirSync(root, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue
+          const home = join(root, entry.name)
+          if (existsSync(join(home, 'bin', process.platform === 'win32' ? 'javac.exe' : 'javac'))) {
+            homes.push(home)
+          }
+        }
+      } catch {
+        continue
+      }
+    }
+    return homes
+  }
+
+  private isDockerUnavailableError(stderr: string): boolean {
+    const message = stderr.toLowerCase()
+    return message.includes('cannot connect to the docker daemon')
+      || message.includes('docker daemon is not running')
+      || message.includes('docker: command not found')
+      || message.includes('unable to find image')
+      || message.includes('is not recognized as an internal or external command')
+  }
+
+  private async runNativeCandidates(
+    candidates: Array<{ command: string; args: string[] }>,
+    stdin: string,
+    timeoutMs: number,
+  ): Promise<Omit<ExecutionResult, 'runtimeMs'>> {
+    let unavailableError = ''
+    for (const candidate of candidates) {
+      const result = await this.runNativeProcess(candidate.command, candidate.args, stdin, timeoutMs)
+      if (!result.runtimeError || !result.stderr.includes('Native runtime is unavailable')) {
+        return result
+      }
+      unavailableError = result.stderr
+    }
+    return {
+      stdout: '',
+      stderr: unavailableError || 'Native runtime is unavailable.',
+      timedOut: false,
+      runtimeError: true,
+    }
   }
 
   private runNativeProcess(

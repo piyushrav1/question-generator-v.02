@@ -17,6 +17,36 @@ export class SubmissionService {
       throw new HttpError(404, 'Question not found.', 'QUESTION_NOT_FOUND')
     }
 
+    const mismatch = this.detectLanguageMismatch(input.language, input.code)
+    if (mismatch) {
+      const mismatchResult: SubmissionResultDto = {
+        id: `sub-${Date.now().toString(36)}`,
+        questionId: input.questionId,
+        language: input.language,
+        status: 'runtime_error',
+        submitted: input.submitted,
+        totalCases: 1,
+        visiblePassed: 0,
+        visibleTotal: 0,
+        hiddenPassed: 0,
+        hiddenTotal: 0,
+        runtimeMs: 0,
+        memoryMb: null,
+        message: mismatch,
+        caseResults: [{
+          id: 'language-mismatch',
+          name: 'Language check',
+          hidden: false,
+          status: 'runtime_error',
+          actualOutput: undefined,
+          expectedOutput: undefined,
+          runtimeMs: 0,
+        }],
+      }
+      await this.repository.saveSubmission(ownerId, mismatchResult)
+      return mismatchResult
+    }
+
     if (typeof input.customInput === 'string') {
       const result = await this.runner.execute({
         language: input.language,
@@ -105,6 +135,27 @@ export class SubmissionService {
     return result
   }
 
+  private detectLanguageMismatch(language: ProgrammingLanguage, code: string): string | null {
+    const looksCpp = /#include\s*<|using\s+namespace\s+std;|std::|vector\s*</.test(code)
+    const looksPython = /^\s*(from\s+\S+\s+import|def\s+\w+\s*\(|class\s+Solution\s*:)/m.test(code)
+    const looksJava = /\bpublic\s+(class|static|int)\b|import\s+java\./.test(code)
+    const looksJavaScript = /\b(function\s+\w+\s*\(|const\s+\w+\s*=|let\s+\w+\s*=|console\.log)/.test(code)
+
+    if (looksCpp && language !== 'C++') {
+      return `Language mismatch: this code uses C++ syntax, but ${language} is selected. Switch the language dropdown to C++.`
+    }
+    if (looksPython && language !== 'Python') {
+      return `Language mismatch: this code uses Python syntax, but ${language} is selected. Switch the language dropdown to Python.`
+    }
+    if (looksJava && language !== 'Java') {
+      return `Language mismatch: this code uses Java syntax, but ${language} is selected. Switch the language dropdown to Java.`
+    }
+    if (looksJavaScript && language !== 'JavaScript') {
+      return `Language mismatch: this code uses JavaScript syntax, but ${language} is selected. Switch the language dropdown to JavaScript.`
+    }
+    return null
+  }
+
   private prepareCode(language: ProgrammingLanguage, code: string): string {
     if (language === 'JavaScript') {
       return this.prepareJavaScriptCode(code)
@@ -119,7 +170,11 @@ export class SubmissionService {
       return code
     }
 
-    return `${code}
+    const futureImport = code.match(/^from\s+__future__\s+import\s+[^\n]+(?:\n|$)/)?.[0] ?? ''
+    const sourceWithoutFuture = futureImport ? code.slice(futureImport.length) : code
+
+    return `${futureImport}from typing import Any, Dict, List, Optional, Set, Tuple
+${sourceWithoutFuture}
 
 if __name__ == "__main__":
     import ast
@@ -263,8 +318,87 @@ if (typeof require !== "undefined" && require.main === module) {
   private prepareCppCode(code: string): string {
     const hasSolution = /\bclass\s+Solution\b/.test(code)
     const method = code.match(/(?:public:|private:|protected:|\n)\s*(?:static\s+)?(?:[\w:<>, ]+\s+)([A-Za-z_]\w*)\s*\(([^)]*)\)/)
-    if (!hasSolution || !method) return code
+    if (!hasSolution) {
+      const standaloneMatch = code.match(/(?:^|\n)\s*(?:int64_t|long\s+long|int|long|bool|double|float|string|vector<[^>]+>|char)\s+(?!main\b)([A-Za-z_]\w*)\s*\(([^)]*)\)\s*\{/m)
+      if (!standaloneMatch) return code
 
+      const functionName = standaloneMatch[1]
+      const returnType = standaloneMatch[0].match(/^\s*(.*?)\s+[A-Za-z_]\w*\s*\(/)?.[1]?.trim()
+      const parameters = standaloneMatch[2].split(',').map((item) => item.trim()).filter(Boolean)
+      const declarations: string[] = []
+      const invocationArguments: string[] = []
+
+      parameters.forEach((parameter, index) => {
+        const match = parameter.match(/^(.*?)\s*([*&]?\s*[A-Za-z_]\w*)$/)
+        const name = match?.[2]?.replace(/[*&]/g, '').trim() ?? `arg${index}`
+        const type = match?.[1]?.replace(/\s+/g, ' ').trim() ?? 'int'
+        if (type.includes('vector')) {
+          declarations.push(`vector<int> ${name}; parseIntVector("${name}", raw, ${name});`)
+        } else if (type.includes('string')) {
+          declarations.push(`string ${name} = parseString("${name}", raw);`)
+        } else {
+          declarations.push(`int64_t ${name} = parseInteger("${name}", raw);`)
+        }
+        invocationArguments.push(name)
+      })
+
+      const returnVector = Boolean(returnType?.includes('vector'))
+      const sourceWithoutMain = code.replace(/\bint\s+main\s*\(/g, 'int testmeman_original_main(')
+
+      return `#include <bits/stdc++.h>
+using namespace std;
+
+${sourceWithoutMain}
+
+int64_t parseInteger(const string& name, const string& raw) {
+  size_t pos = raw.find(name + "=");
+  if (pos == string::npos) return 0;
+  pos += name.size() + 1;
+  while (pos < raw.size() && isspace(raw[pos])) pos++;
+  size_t end = pos;
+  while (end < raw.size() && (isdigit(raw[end]) || raw[end] == '-')) end++;
+  return stoll(raw.substr(pos, end - pos));
+}
+
+string parseString(const string& name, const string& raw) {
+  size_t pos = raw.find(name + "=");
+  if (pos == string::npos) return "";
+  pos += name.size() + 1;
+  while (pos < raw.size() && isspace(raw[pos])) pos++;
+  if (raw[pos] == '"') pos++;
+  size_t end = raw.find_first_of(",}\\n", pos);
+  string value = raw.substr(pos, end - pos);
+  if (!value.empty() && value.back() == '"') value.pop_back();
+  return value;
+}
+
+void parseIntVector(const string& name, const string& raw, vector<int>& output) {
+  size_t pos = raw.find(name + "=");
+  if (pos == string::npos && name == "nums") pos = raw.find("[");
+  if (pos == string::npos) return;
+  pos = raw.find("[", pos);
+  size_t end = raw.find("]", pos);
+  if (pos == string::npos || end == string::npos) return;
+  string body = raw.substr(pos + 1, end - pos - 1);
+  stringstream stream(body);
+  string value;
+  while (getline(stream, value, ',')) {
+    if (!value.empty()) output.push_back(stoi(value));
+  }
+}
+
+int main() {
+  string raw((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
+  ${declarations.join('\n  ')}
+  auto result = ${functionName}(${invocationArguments.join(', ')});
+  ${returnVector
+        ? 'cout << "["; for (size_t i = 0; i < result.size(); ++i) { if (i) cout << ","; cout << result[i]; } cout << "]";'
+        : 'cout << result;'}
+  return 0;
+}`
+    }
+
+    if (!method) return code
     const methodName = method[1]
     const returnTypeMatch = code.match(new RegExp(`([A-Za-z_][\\w:<>,\\[\\] ]*?)\\s+${methodName}\\s*\\(`))
     const returnsVector = returnTypeMatch?.[1].includes('vector') ?? false
@@ -342,8 +476,9 @@ int main() {
   }
 
   private prepareJavaCode(code: string): string {
-    const method = code.match(/(?:public\s+)?(?:static\s+)?([\w.<>,\[\] ]+)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*\{/)
-    if (!method) return `import java.util.*;\n${code}`
+    const normalizedCode = code.replace(/\bpublic\s+class\s+Solution\b/g, 'class Solution')
+    const method = normalizedCode.match(/(?:public\s+)?(?:static\s+)?([\w.<>,\[\] ]+)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*\{/)
+    if (!method) return `import java.util.*;\n${normalizedCode}`
 
     const methodName = method[2]
     const parameters = method[3].split(',').map((item) => item.trim()).filter(Boolean)
@@ -364,9 +499,9 @@ int main() {
       invocationArguments.push(name)
     })
 
-    const importBlock = code.includes('import ') ? '' : 'import java.util.*;\n'
+    const importBlock = normalizedCode.includes('import ') ? '' : 'import java.util.*;\n'
     return `${importBlock}
-${code}
+${normalizedCode}
 
 class Main {
   private static int parseInt(String raw, String name) {
