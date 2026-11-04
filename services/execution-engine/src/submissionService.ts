@@ -67,7 +67,6 @@ export class SubmissionService {
 
 if __name__ == "__main__":
     import ast
-    import inspect
     import json
     import re
     import sys
@@ -105,31 +104,32 @@ if __name__ == "__main__":
         values["args"] = positional
 
     solution = Solution()
-    methods = [
-        getattr(solution, name)
-        for name, member in inspect.getmembers(solution, predicate=inspect.ismethod)
-        if not name.startswith("_")
-    ]
-    method = methods[0] if methods else None
+    method = next(
+        (
+            getattr(solution, name)
+            for name in dir(solution)
+            if not name.startswith("_") and callable(getattr(solution, name))
+        ),
+        None,
+    )
 
     if method is None:
         print("")
     else:
-        parameters = [
-            parameter
-            for parameter in inspect.signature(method).parameters.values()
-            if parameter.name != "self"
-        ]
+        function = getattr(method, "__func__", method)
+        parameter_names = list(function.__code__.co_varnames[1:function.__code__.co_argcount])
         arguments = []
         fallback = values.get("args", [])
+        defaults = function.__defaults__ or ()
+        default_names = parameter_names[-len(defaults):] if defaults else []
 
-        for index, parameter in enumerate(parameters):
-            if parameter.name in values:
-                arguments.append(values[parameter.name])
+        for index, parameter_name in enumerate(parameter_names):
+            if parameter_name in values:
+                arguments.append(values[parameter_name])
             elif index < len(fallback):
                 arguments.append(fallback[index])
-            elif parameter.default is not inspect.Parameter.empty:
-                arguments.append(parameter.default)
+            elif parameter_name in default_names:
+                arguments.append(defaults[default_names.index(parameter_name)])
             else:
                 arguments.append(None)
 
