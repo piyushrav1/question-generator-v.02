@@ -31,7 +31,7 @@ export class QuestionService {
       ...question,
       testCases: question.testCases.map((testCase) =>
         testCase.hidden
-          ? { id: testCase.id, name: testCase.name, input: testCase.input, hidden: true }
+          ? { id: testCase.id, name: testCase.name, input: '', hidden: true }
           : testCase,
       ),
     }

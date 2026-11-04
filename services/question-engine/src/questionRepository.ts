@@ -67,6 +67,9 @@ export class QuestionRepository {
     }
   }): Promise<QuestionDto> {
     const id = `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const validTestCases = input.generated.testCases.filter((testCase) =>
+      typeof testCase.input === 'string' && testCase.input.trim().length > 0
+    )
     const question: QuestionDto = {
       id,
       title: input.generated.title,
@@ -76,7 +79,7 @@ export class QuestionRepository {
       constraints: input.generated.constraints,
       examples: input.generated.examples,
       starterCode: input.generated.starterCode,
-      testCases: input.generated.testCases,
+      testCases: validTestCases,
     }
     this.questions.set(id, question)
     await this.persistQuestion(question)
@@ -85,9 +88,20 @@ export class QuestionRepository {
 
   async findById(id: string): Promise<QuestionDto | undefined> {
     const inMemory = this.questions.get(id)
-    if (inMemory) return inMemory
+    if (inMemory) {
+      return {
+        ...inMemory,
+        testCases: inMemory.testCases.filter((testCase) => typeof testCase.input === 'string' && testCase.input.trim().length > 0),
+      }
+    }
     const db = await this.getDatabase()
-    return db ? await db.collection<QuestionDto>('questions').findOne({ id }) ?? undefined : undefined
+    if (!db) return undefined
+    const stored = await db.collection<QuestionDto>('questions').findOne({ id })
+    if (!stored) return undefined
+    return {
+      ...stored,
+      testCases: stored.testCases.filter((testCase) => typeof testCase.input === 'string' && testCase.input.trim().length > 0),
+    }
   }
 
   async findActiveAttempt(ownerId: string): Promise<AttemptDto | undefined> {

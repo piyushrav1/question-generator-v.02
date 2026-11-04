@@ -471,7 +471,7 @@ function App() {
               {activeAttempt && <span className={`draft-status ${draftStatus}`}>{draftStatus === 'saved' ? 'Draft saved' : 'Saving draft...'}</span>}
               <button className="language-button">
                 {language} <ChevronDown size={14} />
-                <select value={language} onChange={(event) => changeLanguage(event.target.value as ProgrammingLanguage)} aria-label="Select language">
+                <select id="programming-language" name="programmingLanguage" value={language} onChange={(event) => changeLanguage(event.target.value as ProgrammingLanguage)} aria-label="Select language">
                   <option>Python</option>
                   <option>JavaScript</option>
                   <option>Java</option>
@@ -509,13 +509,13 @@ function App() {
                     </div>
                     <label className="settings-row">
                       <span>Font size</span>
-                      <select value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))}>
+                      <select id="editor-font-size" name="editorFontSize" value={fontSize} onChange={(event) => setFontSize(Number(event.target.value))}>
                         {[11, 12, 13, 14, 16, 18].map((size) => <option key={size} value={size}>{size}px</option>)}
                       </select>
                     </label>
                     <label className="settings-row">
                       <span>Word wrap</span>
-                      <input type="checkbox" checked={wordWrap} onChange={(event) => setWordWrap(event.target.checked)} />
+                      <input id="editor-word-wrap" name="editorWordWrap" type="checkbox" checked={wordWrap} onChange={(event) => setWordWrap(event.target.checked)} />
                     </label>
                     <button
                       className="reset-layout-button"
@@ -661,8 +661,10 @@ function App() {
               {activeTab === 'custom' ? (
                   <div className="custom-layout">
                     <div>
-                      <label>Custom input</label>
+                      <label htmlFor="custom-test-input">Custom input</label>
                       <textarea
+                        id="custom-test-input"
+                        name="customTestInput"
                         value={customInput}
                         onChange={(event) => setCustomInput(event.target.value)}
                         placeholder="Enter custom test input"

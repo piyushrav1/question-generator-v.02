@@ -317,7 +317,7 @@ if (typeof require !== "undefined" && require.main === module) {
 
   private prepareCppCode(code: string): string {
     const hasSolution = /\bclass\s+Solution\b/.test(code)
-    const method = code.match(/(?:public:|private:|protected:|\n)\s*(?:static\s+)?(?:[\w:<>, ]+\s+)([A-Za-z_]\w*)\s*\(([^)]*)\)/)
+    const method = code.match(/(?:public:\s*)?([\w:<>,\[\] \t*&]+)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:const\s*)?\{/)
     if (!hasSolution) {
       const standaloneMatch = code.match(/(?:^|\n)\s*(?:int64_t|long\s+long|int|long|bool|double|float|string|vector<[^>]+>|char)\s+(?!main\b)([A-Za-z_]\w*)\s*\(([^)]*)\)\s*\{/m)
       if (!standaloneMatch) return code
@@ -399,10 +399,10 @@ int main() {
     }
 
     if (!method) return code
-    const methodName = method[1]
+    const methodName = method[2]
     const returnTypeMatch = code.match(new RegExp(`([A-Za-z_][\\w:<>,\\[\\] ]*?)\\s+${methodName}\\s*\\(`))
     const returnsVector = returnTypeMatch?.[1].includes('vector') ?? false
-    const parameters = method[2].split(',').map((item) => item.trim()).filter(Boolean)
+    const parameters = method[3].split(',').map((item) => item.trim()).filter(Boolean)
     const argumentCalls: string[] = []
     const parseDeclarations: string[] = []
     parameters.forEach((parameter, index) => {
