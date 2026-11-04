@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -128,13 +129,24 @@ export class DockerCodeRunner implements CodeRunner {
     stdin: string,
     timeoutMs: number,
   ): Promise<Omit<ExecutionResult, 'runtimeMs'>> {
+    const javaHomeCandidates = [
+      process.env.JAVA_HOME,
+      join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Eclipse Adoptium', 'jdk-21.0.13.9-hotspot'),
+      join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Eclipse Adoptium', 'jdk-21.0.9.9-hotspot'),
+    ].filter((value): value is string => Boolean(value))
+    const javaHome = javaHomeCandidates.find((candidate) =>
+      existsSync(join(candidate, 'bin', 'javac.exe')) || existsSync(join(candidate, 'bin', 'javac')))
+    const javacCommand = javaHome ? join(javaHome, 'bin', process.platform === 'win32' ? 'javac.exe' : 'javac') : 'javac'
+    const javaCommand = javaHome ? join(javaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : 'java'
     const executable = request.language === 'Python'
       ? { command: 'python', args: [join(workDir, 'main.py')] }
       : request.language === 'JavaScript'
         ? { command: 'node', args: [join(workDir, 'main.js')] }
         : request.language === 'C++'
           ? { command: join(workDir, 'main.exe'), args: [] }
-          : { command: '', args: [] }
+          : request.language === 'Java'
+            ? { command: javaCommand, args: ['-cp', workDir, 'Main'] }
+            : { command: '', args: [] }
 
     return new Promise((resolve) => {
       let compilation: ReturnType<typeof spawn> | null = null
@@ -156,6 +168,35 @@ export class DockerCodeRunner implements CodeRunner {
             resolve({
               stdout: '',
               stderr: compileError || 'C++ compilation failed.',
+              timedOut: false,
+              runtimeError: true,
+            })
+            return
+          }
+
+          this.runNativeProcess(executable.command, executable.args, stdin, timeoutMs).then(resolve)
+        })
+        return
+      }
+
+      if (request.language === 'Java') {
+        compilation = spawn(javacCommand, ['-d', workDir, join(workDir, 'Main.java')], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        })
+        let compileError = ''
+        compilation.stderr?.on('data', (chunk) => { compileError += chunk.toString() })
+        compilation.on('error', (error) => resolve({
+          stdout: '',
+          stderr: error.message,
+          timedOut: false,
+          runtimeError: true,
+        }))
+        compilation.on('close', (exitCode) => {
+          if (exitCode !== 0) {
+            resolve({
+              stdout: '',
+              stderr: compileError || 'Java compilation failed.',
               timedOut: false,
               runtimeError: true,
             })

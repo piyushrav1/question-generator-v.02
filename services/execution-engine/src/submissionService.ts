@@ -106,6 +106,15 @@ export class SubmissionService {
   }
 
   private prepareCode(language: ProgrammingLanguage, code: string): string {
+    if (language === 'JavaScript') {
+      return this.prepareJavaScriptCode(code)
+    }
+    if (language === 'C++') {
+      return this.prepareCppCode(code)
+    }
+    if (language === 'Java') {
+      return this.prepareJavaCode(code)
+    }
     if (language !== 'Python' || !/\bclass\s+Solution\b/.test(code)) {
       return code
     }
@@ -186,6 +195,221 @@ if __name__ == "__main__":
         else:
             print(result)
 `
+  }
+
+  private prepareJavaScriptCode(code: string): string {
+    const standalone = code.match(/(?:function\s+([A-Za-z_]\w*)\s*\(([^)]*)\))/)
+    const method = code.match(/(?:async\s+)?([A-Za-z_]\w*)\s*\(([^)]*)\)\s*\{/)
+    const methodName = standalone?.[1] ?? method?.[1]
+    const parameterText = standalone?.[2] ?? method?.[2] ?? ''
+    const parameterNames = parameterText.split(',').map((name) => name.trim().replace(/^.../, '')).filter(Boolean)
+
+    return `${code}
+
+if (typeof require !== "undefined" && require.main === module) {
+  let raw = "";
+  if (typeof process !== "undefined") {
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", chunk => raw += chunk);
+    process.stdin.on("end", () => execute(raw));
+  }
+
+  function execute(raw) {
+    raw = raw.trim();
+    let values = {};
+    if (raw.startsWith("{")) {
+      try { values = JSON.parse(raw); } catch (_) {}
+    }
+    if (raw.startsWith("[") && !raw.includes("=")) {
+      try { values.args = [JSON.parse(raw)]; } catch (_) {}
+    }
+    for (const match of raw.matchAll(/([A-Za-z_]\\w*)\\s*=\\s*(\\[[^\\]]*\\]|-?\\d+(?:\\.\\d+)?)/g)) {
+      try { values[match[1]] = JSON.parse(match[2]); } catch (_) { values[match[1]] = match[2]; }
+    }
+    const numsMatch = raw.match(/(?:^|[,\\s])nums\\s*=\\s*(\\[[^\\]]*\\])/);
+    if (numsMatch) {
+      try { values.nums = JSON.parse(numsMatch[1]); } catch (_) {}
+    }
+    const kMatch = raw.match(/(?:^|[,\\s])k\\s*=\\s*(-?\\d+)/);
+    if (kMatch) values.k = Number(kMatch[1]);
+    const names = ${JSON.stringify(parameterNames)};
+    const args = names.map((name, index) => {
+      if (values[name] !== undefined) return values[name];
+      const arrayMatch = raw.match(new RegExp(name + "\\\\s*=\\\\s*(\\\\[[^\\\\]]*\\\\])"));
+      if (arrayMatch) {
+        try { return JSON.parse(arrayMatch[1]); } catch (_) {}
+      }
+      const valueMatch = raw.match(new RegExp(name + "\\\\s*=\\\\s*(-?\\\\d+(?:\\\\.\\\\d+)?)"));
+      if (valueMatch) return Number(valueMatch[1]);
+      const stringMatch = raw.match(new RegExp(name + '\\\\s*=\\\\s*([^,\\\\n}]+)'));
+      if (stringMatch && !/^[0-9.\\[\\]-]/.test(stringMatch[1].trim())) {
+        return stringMatch[1].trim().replace(/^["']|["']$/g, "");
+      }
+      return values.args?.[index];
+    });
+    let result;
+    if (typeof Solution === "function") {
+      const instance = new Solution();
+    result = instance.${methodName || 'unknown'}(...args);
+    } else if (typeof ${methodName ? methodName : 'undefined'} === "function") {
+      result = ${methodName ? methodName : 'undefined'}(...args);
+    }
+    if (typeof result === "object") console.log(JSON.stringify(result));
+    else console.log(String(result ?? ""));
+  }
+}`
+  }
+
+  private prepareCppCode(code: string): string {
+    const hasSolution = /\bclass\s+Solution\b/.test(code)
+    const method = code.match(/(?:public:|private:|protected:|\n)\s*(?:static\s+)?(?:[\w:<>, ]+\s+)([A-Za-z_]\w*)\s*\(([^)]*)\)/)
+    if (!hasSolution || !method) return code
+
+    const methodName = method[1]
+    const returnTypeMatch = code.match(new RegExp(`([A-Za-z_][\\w:<>,\\[\\] ]*?)\\s+${methodName}\\s*\\(`))
+    const returnsVector = returnTypeMatch?.[1].includes('vector') ?? false
+    const parameters = method[2].split(',').map((item) => item.trim()).filter(Boolean)
+    const argumentCalls: string[] = []
+    const parseDeclarations: string[] = []
+    parameters.forEach((parameter, index) => {
+      const match = parameter.match(/^(.*?)\s*([*&]?\s*[A-Za-z_]\w*)\s*(?:=\s*[^,]+)?$/)
+      const name = match?.[2]?.replace(/[*&]/g, '').trim() ?? `arg${index}`
+      const type = match?.[1]?.replace(/\s+/g, ' ').trim() ?? 'int'
+      parseDeclarations.push(
+        type.includes('vector') ? `vector<int> ${name}; parseIntVector("${name}", numsText, ${name});`
+          : type.includes('string') ? `string ${name} = parseString("${name}", raw);`
+            : `int64_t ${name} = parseInteger("${name}", raw);`,
+      )
+      argumentCalls.push(name)
+    })
+
+    return `#include <bits/stdc++.h>
+using namespace std;
+
+${code}
+
+int64_t parseInteger(const string& name, const string& raw) {
+  string pattern = name + "=";
+  size_t pos = raw.find(pattern);
+  if (pos == string::npos) return 0;
+  pos += pattern.size();
+  size_t end = pos;
+  while (end < raw.size() && (isdigit(raw[end]) || raw[end] == '-' || raw[end] == '.')) end++;
+  return stoll(raw.substr(pos, end - pos));
+}
+
+string parseString(const string& name, const string& raw) {
+  string pattern = name + "=";
+  size_t pos = raw.find(pattern);
+  if (pos == string::npos) return "";
+  pos += pattern.size();
+  size_t end = raw.find_first_of(",\\n}", pos);
+  if (raw[pos] == '"') return raw.substr(pos + 1, end - pos - 2);
+  return raw.substr(pos, end - pos);
+}
+
+void parseIntVector(const string& name, const string& raw, vector<int>& output) {
+  size_t pos = raw.find(name + "=");
+  if (pos == string::npos && name == "nums") pos = raw.find("[");
+  if (pos == string::npos) return;
+  pos = raw.find("[", pos);
+  size_t end = raw.find("]", pos);
+  string body = raw.substr(pos + 1, end - pos - 1);
+  stringstream stream(body);
+  string value;
+  while (getline(stream, value, ',')) {
+    if (!value.empty()) output.push_back(stoi(value));
+  }
+}
+
+int main() {
+  string raw((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
+  if (!raw.empty() && raw.back() == '\\n') raw.pop_back();
+  string numsText = raw;
+  ${parseDeclarations.join('\n  ')}
+  Solution solution;
+  auto result = solution.${methodName}(${argumentCalls.join(', ')});
+  ${returnsVector ? `{
+    cout << "[";
+    for (size_t i = 0; i < result.size(); ++i) {
+      if (i) cout << ",";
+      cout << result[i];
+    }
+    cout << "]";
+  }` : 'cout << result;'}
+  return 0;
+}`
+  }
+
+  private prepareJavaCode(code: string): string {
+    const method = code.match(/(?:public\s+)?(?:static\s+)?([\w.<>,\[\] ]+)\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*\{/)
+    if (!method) return `import java.util.*;\n${code}`
+
+    const methodName = method[2]
+    const parameters = method[3].split(',').map((item) => item.trim()).filter(Boolean)
+    const declarations: string[] = []
+    const invocationArguments: string[] = []
+
+    parameters.forEach((parameter, index) => {
+      const match = parameter.match(/^([\w.<>,\[\] ]+)\s+([A-Za-z_]\w*)$/)
+      const type = match?.[1]?.trim() ?? 'int'
+      const name = match?.[2]?.trim() ?? `arg${index}`
+      if (type.includes('[]')) {
+        declarations.push(`int[] ${name} = parseIntArray(raw, "${name}");`)
+      } else if (type === 'String') {
+        declarations.push(`String ${name} = parseString(raw, "${name}");`)
+      } else {
+        declarations.push(`int ${name} = parseInt(raw, "${name}");`)
+      }
+      invocationArguments.push(name)
+    })
+
+    const importBlock = code.includes('import ') ? '' : 'import java.util.*;\n'
+    return `${importBlock}
+${code}
+
+class Main {
+  private static int parseInt(String raw, String name) {
+    java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(name + "\\\\s*=\\\\s*(-?\\\\d+)").matcher(raw);
+    return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
+  }
+
+  private static String parseString(String raw, String name) {
+    java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(name + "\\\\s*=\\\\s*([^,\\\\n}]+)").matcher(raw);
+    return matcher.find() ? matcher.group(1).trim() : "";
+  }
+
+  private static int[] parseIntArray(String raw, String name) {
+    java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(name + "\\\\s*=\\\\s*(\\\\[[^\\\\]]*\\\\])|\\\\[([^\\\\]]+)\\\\]").matcher(raw);
+    String body = "";
+    if (matcher.find()) body = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+    if (body == null) return new int[0];
+    body = body.replace("[", "").replace("]", "").trim();
+    if (body.isEmpty()) return new int[0];
+    String[] parts = body.split(",");
+    int[] values = new int[parts.length];
+    for (int i = 0; i < parts.length; i++) values[i] = Integer.parseInt(parts[i].trim());
+    return values;
+  }
+
+  public static void main(String[] args) throws Exception {
+    String raw = new String(System.in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+    ${declarations.join('\n    ')}
+    Solution solution = new Solution();
+    Object result = solution.${methodName}(${invocationArguments.join(', ')});
+    if (result instanceof int[]) {
+      int[] values = (int[]) result;
+      System.out.print("[");
+      for (int i = 0; i < values.length; i++) {
+        if (i > 0) System.out.print(",");
+        System.out.print(values[i]);
+      }
+      System.out.print("]");
+    } else {
+      System.out.print(result);
+    }
+  }
+}`
   }
 
   private async countPassed(
