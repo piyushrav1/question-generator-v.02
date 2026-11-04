@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Bell, ChevronDown, ChevronUp, Code2, Copy, Play, RefreshCw,
   Sparkles, Send, Settings, Terminal, ThumbsUp, CheckCircle2,
 } from 'lucide-react'
 import { apiClient } from './services'
-import type { ProgrammingLanguage, QuestionDto, SubmissionResultDto } from '../../../packages/shared/src/types'
+import type { AttemptDto, ProgrammingLanguage, QuestionDto, SubmissionResultDto } from '../../../packages/shared/src/types'
 
 const starterCode: Record<string, string> = {
   Python: `def smallest_missing_positive(nums):
@@ -70,7 +70,70 @@ function App() {
   const [customInput, setCustomInput] = useState('')
   const [customOutput, setCustomOutput] = useState('')
   const [customMode, setCustomMode] = useState(false)
+  const [activeAttempt, setActiveAttempt] = useState<AttemptDto | null>(null)
+  const [draftStatus, setDraftStatus] = useState<'saved' | 'saving'>('saved')
+  const revisionRef = useRef(1)
   const visibleTests = question.testCases.filter((test) => !test.hidden)
+
+  useEffect(() => {
+    let cancelled = false
+    apiClient.getActiveAttempt()
+      .then((attempt) => {
+        if (cancelled) return
+        setActiveAttempt(attempt)
+        setQuestion(attempt.question)
+        revisionRef.current = attempt.revision + 1
+
+        const cached = localStorage.getItem(`testmeman:draft:${attempt.id}`)
+        let restoredCode = attempt.code
+        let restoredLanguage = attempt.language
+        if (cached) {
+          try {
+            const draft = JSON.parse(cached) as { code?: string; language?: ProgrammingLanguage; revision?: number }
+            if (typeof draft.code === 'string' && (draft.revision ?? 0) >= attempt.revision) {
+              restoredCode = draft.code
+            }
+            if (draft.language) restoredLanguage = draft.language
+          } catch {
+            // Ignore malformed browser drafts.
+          }
+        }
+        setLanguage(restoredLanguage)
+        setCode(restoredCode || attempt.question.starterCode[restoredLanguage])
+        setSelectedTest(0)
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setGenerationError(error instanceof Error ? error.message : 'Unable to resume the active attempt.')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!activeAttempt) return
+    setDraftStatus('saving')
+    const timer = window.setTimeout(() => {
+      const revision = revisionRef.current++
+      localStorage.setItem(`testmeman:draft:${activeAttempt.id}`, JSON.stringify({
+        code,
+        language,
+        revision,
+        updatedAt: new Date().toISOString(),
+      }))
+      apiClient.saveAttemptDraft({
+        attemptId: activeAttempt.id,
+        language,
+        code,
+        revision,
+      })
+        .then(() => setDraftStatus('saved'))
+        .catch(() => setDraftStatus('saving'))
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [activeAttempt, code, language])
 
   const changeLanguage = (value: ProgrammingLanguage) => {
     setLanguage(value)
@@ -197,10 +260,13 @@ function App() {
 
   const generateQuestion = () => {
     setGenerating(true)
-    apiClient.generateQuestion({ topic: 'arrays', difficulty: 'medium' })
-      .then((question) => {
-        setQuestion(question)
-        setCode(question.starterCode?.[language] ?? starterCode[language])
+    apiClient.createNewAttempt({ topic: 'arrays', difficulty: 'medium' })
+      .then((attempt) => {
+        setActiveAttempt(attempt)
+        setQuestion(attempt.question)
+        setLanguage(attempt.language)
+        setCode(attempt.question.starterCode?.[attempt.language] ?? starterCode[attempt.language])
+        revisionRef.current = attempt.revision + 1
         setSelectedTest(0)
         setSubmitted(false)
         setSubmissionResult(null)
@@ -293,6 +359,7 @@ function App() {
               <button className={`tab ${editorTab === 'submissions' ? 'active' : ''}`} onClick={() => setEditorTab('submissions')}>Submissions</button>
             </div>
             <div className="editor-actions">
+              {activeAttempt && <span className={`draft-status ${draftStatus}`}>{draftStatus === 'saved' ? 'Draft saved' : 'Saving draft...'}</span>}
               <button className="language-button">
                 {language} <ChevronDown size={14} />
                 <select value={language} onChange={(event) => changeLanguage(event.target.value as ProgrammingLanguage)} aria-label="Select language">

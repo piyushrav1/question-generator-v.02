@@ -63,3 +63,15 @@ export interface SubmissionResultDto {
   message: string
   caseResults?: SubmissionCaseResultDto[]
 }
+
+export interface AttemptDto {
+  id: string
+  questionId: string
+  question: QuestionDto
+  language: ProgrammingLanguage
+  code: string
+  status: 'active' | 'abandoned' | 'completed'
+  revision: number
+  createdAt: string
+  updatedAt: string
+}

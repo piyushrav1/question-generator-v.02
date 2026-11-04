@@ -95,6 +95,8 @@ button { cursor: pointer; }
 }
 .tab.active { color: #202b35; border-bottom-color: #178b74; font-weight: 600; }
 .editor-actions { display: flex; align-items: center; gap: 4px; }
+.draft-status { margin-right: 6px; color: #16825d; font-size: 10px; }
+.draft-status.saving { color: #8a6a2b; }
 .language-button {
   height: 34px; position: relative; border: 1px solid #e0e5e8; border-radius: 7px; background: white;
   color: #46525d; display: flex; align-items: center; gap: 7px; padding: 0 10px; font-size: 12px;

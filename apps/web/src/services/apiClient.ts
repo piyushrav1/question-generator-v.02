@@ -1,4 +1,4 @@
-import type { GenerateQuestionRequest, QuestionDto, SubmissionRequest, SubmissionResultDto } from '../../../../packages/shared/src/types'
+import type { AttemptDto, GenerateQuestionRequest, QuestionDto, SubmissionRequest, SubmissionResultDto } from '../../../../packages/shared/src/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? ''
 
@@ -12,6 +12,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...init?.headers,
@@ -35,6 +36,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const apiClient = {
   health: () => request<{ status: string }>('/api/health'),
+  getActiveAttempt: () => request<AttemptDto>('/api/attempts/active'),
+  createNewAttempt: (input: GenerateQuestionRequest = {}) =>
+    request<AttemptDto>('/api/attempts/new', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  saveAttemptDraft: (input: { attemptId: string; language: AttemptDto['language']; code: string; revision: number }) =>
+    request<AttemptDto>('/api/attempts/draft', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
   generateQuestion: (input: GenerateQuestionRequest = {}) =>
     request<QuestionDto>('/api/questions/generate', {
       method: 'POST',

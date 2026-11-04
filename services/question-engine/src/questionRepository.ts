@@ -1,6 +1,7 @@
-import type { Difficulty, ProgrammingLanguage, QuestionDto, TestCaseDto } from '../../../packages/shared/src/types.js'
+import type { AttemptDto, Difficulty, ProgrammingLanguage, QuestionDto, TestCaseDto } from '../../../packages/shared/src/types.js'
 import { MongoClient, type Db } from 'mongodb'
 import type { SubmissionResultDto } from '../../../packages/shared/src/types.js'
+import { randomUUID } from 'node:crypto'
 
 const starterCode: Record<ProgrammingLanguage, string> = {
   Python: 'def smallest_missing_positive(nums):\n    # Write your solution here\n    pass',
@@ -11,6 +12,7 @@ const starterCode: Record<ProgrammingLanguage, string> = {
 
 export class QuestionRepository {
   private readonly questions = new Map<string, QuestionDto>()
+  private readonly attempts = new Map<string, AttemptDto>()
   private readonly client?: MongoClient
   private readonly databaseName: string
   private db?: Db
@@ -88,6 +90,88 @@ export class QuestionRepository {
     return db ? await db.collection<QuestionDto>('questions').findOne({ id }) ?? undefined : undefined
   }
 
+  async findActiveAttempt(ownerId: string): Promise<AttemptDto | undefined> {
+    const db = await this.getDatabase()
+    if (!db) {
+      return Array.from(this.attempts.values()).find((attempt) => {
+        const stored = attempt as AttemptDto & { ownerId?: string }
+        return stored.ownerId === ownerId && attempt.status === 'active'
+      })
+    }
+    const stored = await db.collection<AttemptDto & { ownerId: string }>('attempts').findOne({
+      ownerId,
+      status: 'active',
+    })
+    if (!stored) return undefined
+    const question = await this.findById(stored.questionId)
+    return question ? { ...stored, question } : undefined
+  }
+
+  async createAttempt(ownerId: string, question: QuestionDto, language: ProgrammingLanguage, code: string): Promise<AttemptDto> {
+    const now = new Date().toISOString()
+    const attempt: AttemptDto = {
+      id: `a-${randomUUID()}`,
+      questionId: question.id,
+      question,
+      language,
+      code,
+      status: 'active',
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    }
+    const db = await this.getDatabase()
+    if (!db) {
+      const key = `${ownerId}:${attempt.id}`
+      this.attempts.set(key, Object.assign(attempt, { ownerId }))
+      return attempt
+    }
+    await db.collection('attempts').insertOne({ ...attempt, ownerId })
+    return attempt
+  }
+
+  async saveAttemptDraft(ownerId: string, attemptId: string, language: ProgrammingLanguage, code: string, revision: number): Promise<AttemptDto | undefined> {
+    const db = await this.getDatabase()
+    if (!db) {
+      const stored = Array.from(this.attempts.entries()).find(([key, attempt]) =>
+        key.startsWith(`${ownerId}:`) && attempt.id === attemptId,
+      )
+      if (!stored) return undefined
+      const attempt = stored[1]
+      attempt.language = language
+      attempt.code = code
+      attempt.revision = Math.max(attempt.revision, revision)
+      attempt.updatedAt = new Date().toISOString()
+      return attempt
+    }
+    const result = await db.collection<AttemptDto & { ownerId: string }>('attempts').findOneAndUpdate(
+      { id: attemptId, ownerId, status: 'active', revision: { $lte: revision } },
+      { $set: { language, code, revision, updatedAt: new Date().toISOString() } },
+      { returnDocument: 'after' },
+    )
+    if (!result) return undefined
+    const question = await this.findById(result.questionId)
+    return question ? { ...result, question } : undefined
+  }
+
+  async abandonAttempt(ownerId: string, attemptId: string): Promise<void> {
+    const db = await this.getDatabase()
+    if (!db) {
+      const stored = Array.from(this.attempts.entries()).find(([key, attempt]) =>
+        key.startsWith(`${ownerId}:`) && attempt.id === attemptId,
+      )
+      if (stored) {
+        stored[1].status = 'abandoned'
+        stored[1].updatedAt = new Date().toISOString()
+      }
+      return
+    }
+    await db.collection('attempts').updateOne(
+      { id: attemptId, ownerId, status: 'active' },
+      { $set: { status: 'abandoned', updatedAt: new Date().toISOString() } },
+    )
+  }
+
   async saveSubmission(result: SubmissionResultDto): Promise<void> {
     const db = await this.getDatabase()
     if (!db) return
@@ -101,6 +185,8 @@ export class QuestionRepository {
       this.db = this.client.db(this.databaseName)
       await this.db.collection('questions').createIndex({ id: 1 }, { unique: true })
       await this.db.collection('submissions').createIndex({ questionId: 1, id: 1 })
+      await this.db.collection('attempts').createIndex({ ownerId: 1, status: 1, updatedAt: -1 })
+      await this.db.collection('attempts').createIndex({ id: 1 }, { unique: true })
     }
     return this.db
   }

@@ -13,6 +13,7 @@ import { createSubmissionRouter } from './routes/submissionRoutes.js'
 import { QuestionService } from '../../../../services/question-engine/src/questionService.js'
 import { SubmissionService } from '../../../../services/execution-engine/src/submissionService.js'
 import { GeminiQuestionProvider } from '../../../../services/question-engine/src/geminiProvider.js'
+import { createAttemptRouter } from './routes/attemptRoutes.js'
 
 export function createApp() {
   const app = express()
@@ -25,13 +26,14 @@ export function createApp() {
 
   app.disable('x-powered-by')
   app.use(helmet())
-  app.use(cors({ origin: env.CLIENT_ORIGIN }))
+  app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }))
   app.use(express.json({ limit: '1mb' }))
   app.use(pinoHttp({ logger }))
 
   app.use('/api/health', healthRouter)
   app.use('/api/questions', createQuestionRouter(questionService))
   app.use('/api/submissions', createSubmissionRouter(submissionService))
+  app.use('/api/attempts', createAttemptRouter(repository, questionService))
 
   app.use(notFoundHandler)
   app.use(errorHandler)
