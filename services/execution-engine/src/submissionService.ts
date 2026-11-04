@@ -12,7 +12,7 @@ export class SubmissionService {
   ) {}
 
   async evaluate(input: SubmissionRequest): Promise<SubmissionResultDto> {
-    const question = this.repository.findById(input.questionId)
+    const question = await this.repository.findById(input.questionId)
     if (!question) {
       throw new HttpError(404, 'Question not found.', 'QUESTION_NOT_FOUND')
     }
@@ -35,7 +35,7 @@ export class SubmissionService {
           : 'wrong_answer'
     const runtimeValues = [...visiblePassed.runtimeMs, ...hiddenPassed.runtimeMs]
 
-    return {
+    const result: SubmissionResultDto = {
       id: `sub-${Date.now().toString(36)}`,
       questionId: input.questionId,
       language: input.language,
@@ -56,6 +56,9 @@ export class SubmissionService {
             ? (visiblePassed.stderr || hiddenPassed.stderr || 'Your submission could not be executed. Check the language and syntax.')
             : 'One or more test cases failed.',
     }
+
+    await this.repository.saveSubmission(result)
+    return result
   }
 
   private prepareCode(language: ProgrammingLanguage, code: string): string {

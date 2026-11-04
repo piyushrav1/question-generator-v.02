@@ -21,14 +21,22 @@ export function createQuestionRouter(service: QuestionService): Router {
     }
   })
 
-  router.get('/:id', (request, response) => {
+  router.get('/:id', async (request, response, next) => {
     const id = Array.isArray(request.params.id) ? request.params.id[0] : request.params.id
-    response.json(service.getById(id))
+    try {
+      response.json(await service.getById(id))
+    } catch (error) {
+      next(error)
+    }
   })
 
-  router.post('/:id/hints', (request, response) => {
+  router.post('/:id/hints', async (request, response, next) => {
     const id = Array.isArray(request.params.id) ? request.params.id[0] : request.params.id
-    response.json(service.getHint(id))
+    try {
+      response.json(await service.getHint(id))
+    } catch (error) {
+      next(error)
+    }
   })
 
   return router

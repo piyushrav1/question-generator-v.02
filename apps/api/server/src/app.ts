@@ -16,7 +16,7 @@ import { GeminiQuestionProvider } from '../../../../services/question-engine/src
 
 export function createApp() {
   const app = express()
-  const repository = new QuestionRepository()
+  const repository = new QuestionRepository(env.MONGODB_URI, env.MONGODB_DB)
   const questionProvider = env.GEMINI_API_KEY
     ? new GeminiQuestionProvider(env.GEMINI_API_KEY, env.GEMINI_MODEL)
     : undefined

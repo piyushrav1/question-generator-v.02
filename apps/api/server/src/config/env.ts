@@ -12,6 +12,8 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().trim().min(1).default('gemini-3.5-flash-lite'),
   EXECUTION_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(3000),
+  MONGODB_URI: z.string().trim().min(1).optional(),
+  MONGODB_DB: z.string().trim().min(1).default('testmeman'),
 })
 
 export const env = envSchema.parse(process.env)

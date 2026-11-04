@@ -18,12 +18,12 @@ export class QuestionService {
       )
     }
     const generated = await this.provider.generate({ topic, difficulty })
-    const question = this.repository.save({ topic, difficulty, generated })
-    return this.getById(question.id)
+    const question = await this.repository.save({ topic, difficulty, generated })
+    return await this.getById(question.id)
   }
 
-  getById(id: string): QuestionDto {
-    const question = this.repository.findById(id)
+  async getById(id: string): Promise<QuestionDto> {
+    const question = await this.repository.findById(id)
     if (!question) {
       throw new HttpError(404, 'Question not found.', 'QUESTION_NOT_FOUND')
     }
@@ -37,8 +37,8 @@ export class QuestionService {
     }
   }
 
-  getHint(id: string): { hint: string; level: number } {
-    this.getById(id)
+  async getHint(id: string): Promise<{ hint: string; level: number }> {
+    await this.getById(id)
     return {
       hint: 'Consider whether each positive integer can be stored at the index corresponding to its value minus one. Use the array itself for state.',
       level: 1,
